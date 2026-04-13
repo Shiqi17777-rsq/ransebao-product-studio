@@ -111,6 +111,13 @@ cd product-studio/desktop-app
 npm run build:win-portable
 ```
 
+说明：
+
+- 当前第一版 Windows 本地化打包默认走**无签名测试构建**。
+- `desktop-app/package.json` 已显式设置 `build.win.signAndEditExecutable = false`。
+- 这样做是为了先避开 `electron-builder` 在 Windows 上解压 `winCodeSign` 时的符号链接权限问题，优先保证 `portable.exe` 和安装版 `exe` 能稳定产出。
+- 这意味着当前 Windows 产物不会做可执行文件资源编辑和代码签名；等第一版本地化打包完全打通后，再单独恢复正式签名链。
+
 ### 打包前准备 bundle 资源
 
 ```bash

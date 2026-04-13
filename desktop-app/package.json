@@ -71,6 +71,7 @@
           ]
         }
       ],
+      "signAndEditExecutable": false,
       "artifactName": "Ransebao-Product-Studio-${version}-win-${arch}.${ext}"
     },
     "nsis": {

@@ -75,5 +75,6 @@ PRODUCT_STUDIO_SAU_SOURCE=/absolute/path/to/social-auto-upload npm run build:win
 ## 当前边界
 
 - 还没有正式签名 / 公证
+- Windows 第一版测试包显式关闭了 `signAndEditExecutable`，优先保证 unsigned 本地化打包可用
 - Windows 包已经能构建，但还需要真实 Windows 冷启动验收
 - 依赖安装仍允许联网，尤其是 Dreamina 和 `patchright chromium`
