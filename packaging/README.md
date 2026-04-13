@@ -55,6 +55,23 @@ npm run build:win
 npm run verify:dist
 ```
 
+## `social-auto-upload` 源码前提
+
+当前 `prepare_bundle_assets.mjs` 在打包 Windows / macOS bundle 时，会优先从以下位置构建 `social-auto-upload` wheel：
+
+- 默认：`../social-auto-upload`
+- 或显式环境变量：`PRODUCT_STUDIO_SAU_SOURCE`
+
+当前参考仓库：
+
+- [https://github.com/dreammis/social-auto-upload](https://github.com/dreammis/social-auto-upload)
+
+如果开发机上没有放在 Playground 同级目录，请先指定：
+
+```bash
+PRODUCT_STUDIO_SAU_SOURCE=/absolute/path/to/social-auto-upload npm run build:win
+```
+
 ## 当前边界
 
 - 还没有正式签名 / 公证

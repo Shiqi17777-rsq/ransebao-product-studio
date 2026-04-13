@@ -53,6 +53,12 @@ const windowsSauExtraWheelSpecs = [
   "win32-setctime==1.2.0"
 ];
 
+function venvPythonPath(venvRoot) {
+  return process.platform === "win32"
+    ? path.join(venvRoot, "Scripts", "python.exe")
+    : path.join(venvRoot, "bin", "python");
+}
+
 function log(message) {
   console.log(`[prepare_bundle_assets] ${message}`);
 }
@@ -435,7 +441,7 @@ function prepareSauBundle(pythonBin) {
   ensureDir(sauWheelhouseStage);
   resetDir(sauBuildVenvStage);
 
-  const sauBuildPython = path.join(sauBuildVenvStage, "bin", "python");
+  const sauBuildPython = venvPythonPath(sauBuildVenvStage);
 
   if (!skipWheelhouse) {
     run(pythonBin, ["-m", "venv", sauBuildVenvStage], {
