@@ -1,0 +1,15 @@
+{
+  "id": "ransebao",
+  "name": "染色宝",
+  "industry": "美发 / 美业",
+  "default_workflow": "daily",
+  "default_platforms": [
+    "xiaohongshu",
+    "douyin"
+  ],
+  "knowledge_dir": "knowledge",
+  "themes_dir": "themes",
+  "prompts_dir": "prompts",
+  "assets_dir": "assets",
+  "sources_dir": "sources"
+}

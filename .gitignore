@@ -1,0 +1,33 @@
+.DS_Store
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Desktop app build outputs
+desktop-app/node_modules/
+desktop-app/release/
+desktop-app/dist/
+
+# Packaging staging
+packaging/bundle-staging/
+
+# Runtime machine-local data
+runtime/config/local.json
+runtime/config/publish_accounts.json
+runtime/vendor/
+
+# Runtime generated data
+runtime/ransebao/cache/
+runtime/ransebao/logs/
+runtime/ransebao/outputs/
+runtime/ransebao/state/
+
+# Keep runtime skeleton
+!runtime/cache/.gitkeep
+!runtime/logs/.gitkeep
+!runtime/outputs/.gitkeep
+!runtime/state/.gitkeep
+!runtime/config/local.example.json
+!runtime/README.md

@@ -1,0 +1,35 @@
+{
+  "selected_product": "ransebao",
+  "workspace_root": "./runtime",
+  "api_keys": {
+    "dreamina": "",
+    "openai": ""
+  },
+  "runtime": {
+    "python_bin": ""
+  },
+  "image": {
+    "dreamina_cli_root": "",
+    "device_image_dir": "",
+    "downloads_dir": "",
+    "poll_attempts": 8,
+    "poll_interval_seconds": 15
+  },
+  "publish": {
+    "image_dir": "",
+    "sau_root": "",
+    "patchright_browsers_path": "",
+    "xiaohongshu": {
+      "enabled": true,
+      "root": "",
+      "storage_state_files": [],
+      "private": true
+    },
+    "douyin": {
+      "enabled": true,
+      "root": "",
+      "account": "creator",
+      "headed": true
+    }
+  }
+}

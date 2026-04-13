@@ -1,0 +1,123 @@
+{
+  "brand_name": "染色宝",
+  "company_name": "东莞市染色宝数字科技有限公司",
+  "product_desc": "染色宝智能染发设备，机身主色为黑色，点缀银色边框和Logo，哑光喷砂金属质感，整体具有专业美业设备与工业设计感。",
+  "base_tags": [
+    "#染色宝",
+    "#智能染发",
+    "#美业门店"
+  ],
+  "content_type_tags": {
+    "门店经营": [
+      "#门店经营",
+      "#标准化服务"
+    ],
+    "顾客认知": [
+      "#顾客沟通",
+      "#染发体验"
+    ],
+    "产品价值": [
+      "#美业设备",
+      "#智能配比"
+    ],
+    "AI 美业": [
+      "#AI美业",
+      "#数字化经营"
+    ],
+    "招商合作": [
+      "#门店合作",
+      "#美业招商"
+    ]
+  },
+  "subtitle_by_content_type": {
+    "门店经营": "从经验依赖走向流程标准化，让染发项目更稳更能复制",
+    "顾客认知": "把顾客顾虑讲清楚，把结果稳定感和安心感讲明白",
+    "产品价值": "把设备、流程和结果稳定性讲得更直观、更容易理解",
+    "AI 美业": "把智能辅助和数字化流程讲清楚，让先进性和落地感同时成立",
+    "招商合作": "把合作模式和持续经营逻辑讲清楚，让门店更容易理解价值"
+  },
+  "scene_by_content_type": {
+    "门店经营": "高端美业经营海报，门店场景、流程标准化信息与设备协同出现，突出经营效率和复制能力",
+    "顾客认知": "高级美业认知海报，突出顾客沟通、安心感和结果稳定感",
+    "产品价值": "高端美业产品海报，突出设备特写、操作流程和稳定结果",
+    "AI 美业": "科技感美业海报，突出AI辅助、数字化流程和智能配比",
+    "招商合作": "高端商务招商海报，突出合作模式、长期经营和门店升级"
+  },
+  "default_template": "portrait-hero",
+  "legacy_template_aliases": {
+    "standard": "portrait-hero",
+    "premium": "product-hero",
+    "campaign": "black-prismatic",
+    "insight": "blue-minimal"
+  },
+  "templates": {
+    "portrait-hero": {
+      "name": "人物主视觉版",
+      "description": "人物大图 + 中下部文案 + 左下产品 + 右下 logo",
+      "layout_focus": "上半部人物主视觉，中下部保留大块文案区，左下产品、右下品牌收口。",
+      "prompt_style": "时尚美容广告风，奶油色、米白、香槟色、银色交织的流动膏体与高端人物主视觉。",
+      "visual_modifiers": [
+        "人物主视觉",
+        "奶油米白香槟银色",
+        "高端美妆广告质感"
+      ]
+    },
+    "product-hero": {
+      "name": "产品主视觉版",
+      "description": "顶部标题区 + 中部设备主图 + 中下部效果图 + 底部说明",
+      "layout_focus": "顶部 logo 和标题，中部设备主视觉，中下部效果展示，底部再补一层说明文案。",
+      "prompt_style": "高级时尚美容广告风，暖棕、奶咖、玫瑰金、浅金属色，突出设备主视觉和高端陈列感。",
+      "visual_modifiers": [
+        "产品主视觉",
+        "暖棕奶咖玫瑰金",
+        "展示台与效果图区"
+      ]
+    },
+    "black-prismatic": {
+      "name": "黑底炫彩版",
+      "description": "纯黑背景 + 彩虹折射光 + 霓虹反射 + 金属液体流光",
+      "layout_focus": "黑底高冲击视觉，中部产品主图，中下部标题说明，底部四组卖点模块。",
+      "prompt_style": "黑底炫彩科技美业广告风，未来感、科技感、高级感并存，适合招商和高曝光内容。",
+      "composition": {
+        "mode": "mixed-ai-overlay",
+        "ai_generated_zones": [
+          "左上品牌 logo / 品牌字样",
+          "中上部两行内主标题",
+          "中下部标题区与一行短说明",
+          "中部产品主视觉",
+          "底部四宫格卡片与短标题",
+          "最底部公司名称"
+        ],
+        "overlay_zones": [
+          "底部四宫格卖点文字"
+        ],
+        "copy_limits": {
+          "headline_max_lines": 2,
+          "headline_max_chars_per_line": 12,
+          "mid_title_max_chars": 10,
+          "mid_description_max_chars": 14,
+          "subtitle_max_lines": 1,
+          "subtitle_max_chars": 10,
+          "grid_point_count": 4,
+          "grid_point_max_chars": 6
+        }
+      },
+      "visual_modifiers": [
+        "纯黑背景",
+        "彩虹折射与霓虹反射",
+        "金属液体流光"
+      ]
+    },
+    "blue-minimal": {
+      "name": "蓝调极简产品版",
+      "description": "顶部 logo + 中央产品 + 底部大标题 + 最底部补充说明",
+      "layout_focus": "中央产品主图更稳定，下半部分大标题，整体留白充足，结构克制。",
+      "prompt_style": "蓝调极简商业广告风，深蓝渐变、冷色光束、柔和雾感和镜面反光，像国际大牌护肤或香氛广告。",
+      "visual_modifiers": [
+        "深蓝渐变",
+        "冷色光束与空气雾感",
+        "极简产品广告"
+      ]
+    }
+  }
+}

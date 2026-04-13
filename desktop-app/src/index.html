@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>染色宝 Product Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="desktop-shell">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <div class="brand-box">
+            <div class="brand-mark">
+              <img src="./assets/brand/logo-transparent.png" alt="染色宝 logo" class="brand-logo" />
+            </div>
+            <div class="brand-copy">
+              <span class="brand-kicker">Ransebao</span>
+              <strong>染色宝客户端</strong>
+              <small>门店解决方案工作台</small>
+            </div>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="主导航">
+          <div class="nav-section">
+            <p class="nav-section-label">内容流程</p>
+            <button class="nav-item is-active" type="button" data-page="upstream">
+              <span class="nav-icon">◉</span>
+              <span>上游</span>
+            </button>
+            <button class="nav-item" type="button" data-page="brief">
+              <span class="nav-icon">◎</span>
+              <span>今日 brief</span>
+            </button>
+            <button class="nav-item" type="button" data-page="template">
+              <span class="nav-icon">◌</span>
+              <span>图片模板</span>
+            </button>
+            <button class="nav-item" type="button" data-page="publish">
+              <span class="nav-icon">◍</span>
+              <span>发布确认</span>
+            </button>
+          </div>
+
+          <div class="nav-section">
+            <p class="nav-section-label">系统</p>
+            <button class="nav-item" type="button" data-page="accounts">
+              <span class="nav-icon">◓</span>
+              <span>账号管理</span>
+            </button>
+            <button class="nav-item" type="button" data-page="settings">
+              <span class="nav-icon">◐</span>
+              <span>运行与设置</span>
+            </button>
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="sidebar-status">
+            <span>工作区状态</span>
+            <strong>本地客户端模式</strong>
+            <small>以运行今日流程为唯一主动作</small>
+          </div>
+          <button class="signout-button" type="button" data-page="settings">打开设置</button>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="workspace-header glass-surface">
+          <div class="header-main">
+            <p class="section-label" id="page-label">上游</p>
+            <h1 id="page-title">先看今天有没有热点，再决定今天讲什么</h1>
+            <p class="header-copy" id="page-description">
+              这里先看两个资讯池和路由结果，再决定今天走热点还是品牌兜底。
+            </p>
+          </div>
+
+          <div class="header-side">
+            <div class="header-meta-row">
+              <div class="meta-pill">
+                <span>当前产品</span>
+                <strong id="product-name">染色宝</strong>
+              </div>
+              <div class="meta-pill">
+                <span>最后更新</span>
+                <strong id="dashboard-date">-</strong>
+              </div>
+              <div class="meta-pill">
+                <span>当前路由</span>
+                <strong id="route-mode-badge">-</strong>
+              </div>
+            </div>
+
+            <div class="header-actions">
+              <button class="secondary-action" type="button" data-action="check-environment"><span>检查环境</span></button>
+              <button class="primary-action" type="button" data-action="run-daily"><span>运行今日流程</span></button>
+            </div>
+          </div>
+        </header>
+
+        <section class="action-status glass-surface" id="action-status-panel" data-state="idle">
+          <div class="action-status-head">
+            <div class="action-status-copy">
+              <p class="section-label" id="action-status-label">执行状态</p>
+              <strong id="action-status-title">等待操作</strong>
+              <p class="action-status-detail" id="action-status-detail">点击按钮后，这里会显示当前动作、阶段和完成状态。</p>
+            </div>
+            <div class="mini-badge" id="action-status-badge">空闲</div>
+          </div>
+
+          <div class="progress-track action-progress-track">
+            <div class="progress-fill" id="action-progress-fill"></div>
+          </div>
+
+          <div class="action-status-foot">
+            <span id="action-progress-step">尚未开始</span>
+            <strong id="action-progress-percent">0%</strong>
+          </div>
+        </section>
+
+        <div class="workspace-scroll">
+          <div class="workspace-pages">
+            <section class="page-view is-active" data-view="upstream">
+              <div class="overview-grid">
+                <article class="metric-card">
+                  <div class="metric-copy">
+                    <span>热点资讯池</span>
+                    <strong id="metric-hot-count">0</strong>
+                  </div>
+                  <small>今天命中的相关热点数量</small>
+                </article>
+                <article class="metric-card">
+                  <div class="metric-copy">
+                    <span>品牌常规池</span>
+                    <strong id="metric-brand-count">0</strong>
+                  </div>
+                  <small>品牌常规主题的候选数量</small>
+                </article>
+                <article class="metric-card">
+                  <div class="metric-copy">
+                    <span>路由结果</span>
+                    <strong id="metric-route">-</strong>
+                  </div>
+                  <small>今天最终走哪条内容路径</small>
+                </article>
+                <article class="metric-card">
+                  <div class="metric-copy">
+                    <span>候选 brief</span>
+                    <strong id="metric-briefs">0</strong>
+                  </div>
+                  <small>可继续进入 today brief 的候选数</small>
+                </article>
+              </div>
+
+              <div class="page-grid two-col">
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">热点资讯池</p>
+                      <h2>最新热点</h2>
+                    </div>
+                    <button class="text-button" type="button" data-action="refresh-upstream">刷新资讯</button>
+                  </div>
+                  <div class="simple-list" id="hot-pool-list"></div>
+                </article>
+
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">品牌常规池</p>
+                      <h2>品牌兜底</h2>
+                    </div>
+                    <button class="text-button" type="button" data-page-jump="brief">查看候选 brief</button>
+                  </div>
+                  <div class="simple-list" id="brand-pool-list"></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="page-view" data-view="brief">
+              <div class="page-grid two-col">
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">今日最佳</p>
+                      <h2 id="winner-topic">等待今日主题</h2>
+                    </div>
+                    <div class="mini-badge" id="brief-score">-</div>
+                  </div>
+
+                  <div class="brief-stack">
+                    <div class="content-title-box">
+                      <span>主标题</span>
+                      <strong id="main-title">-</strong>
+                    </div>
+
+                    <div class="content-status-row">
+                      <div>
+                        <span>当前平台</span>
+                        <strong id="best-platform">-</strong>
+                      </div>
+                      <div>
+                        <span>目标受众</span>
+                        <strong id="best-audience">-</strong>
+                      </div>
+                      <div>
+                        <span>内容目标</span>
+                        <strong id="brief-goal">-</strong>
+                      </div>
+                    </div>
+
+                    <div class="editable-card">
+                      <span>核心切口</span>
+                      <textarea id="brief-angle-input" rows="4"></textarea>
+                    </div>
+
+                    <div class="editable-card">
+                      <span>文案骨架</span>
+                      <textarea id="brief-outline-input" rows="8"></textarea>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">操作</p>
+                      <h2>编辑与确认</h2>
+                    </div>
+                  </div>
+
+                  <div class="quick-grid">
+                    <button class="quick-action" type="button" data-action="reselect-brief">
+                      <strong>重新选择</strong>
+                      <span>从候选中重新挑选今天的 brief</span>
+                    </button>
+                    <button class="quick-action" type="button" data-action="refresh-upstream">
+                      <strong>重新生成</strong>
+                      <span>刷新今天的上游结果并重新产出 brief</span>
+                    </button>
+                    <button class="quick-action" type="button" data-action="save-brief-draft">
+                      <strong>保存修改</strong>
+                      <span>保留你刚刚对 brief 的人工调整</span>
+                    </button>
+                    <button class="quick-action" type="button" data-page-jump="template">
+                      <strong>进入图片模板</strong>
+                      <span>带着今天的 brief 进入图片生成前确认</span>
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="page-view" data-view="template">
+              <div class="page-grid template-page-grid">
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">今日模板组合</p>
+                      <h2>先选 3 个模板，再生成今天的 3 张图</h2>
+                    </div>
+                    <div class="mini-badge" id="template-selection-label">已选 0/3</div>
+                  </div>
+
+                  <div class="template-slot-grid" id="template-slot-grid"></div>
+                </article>
+
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">生成结果</p>
+                      <h2>今天的 3 张图片结果</h2>
+                    </div>
+                    <button class="text-button" type="button" data-action="open-images">查看大图</button>
+                  </div>
+
+                  <div class="template-result-grid" id="template-result-grid"></div>
+
+                  <div class="overview-actions top-gap">
+                    <button class="secondary-action compact" type="button" data-action="execute-image">生成 3 张图片</button>
+                    <button class="secondary-action compact" type="button" data-page-jump="publish">进入发布确认</button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="page-view" data-view="publish">
+              <div class="page-grid two-col">
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">发布确认</p>
+                      <h2>平台文案</h2>
+                    </div>
+                  </div>
+
+                  <div class="content-summary">
+                    <div class="content-preview-block">
+                      <span>小红书</span>
+                      <p id="xhs-body"></p>
+                    </div>
+
+                    <div class="content-preview-block">
+                      <span>抖音</span>
+                      <p id="douyin-body"></p>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="panel-card" id="results-panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">发布动作</p>
+                      <h2>发布前确认</h2>
+                    </div>
+                  </div>
+
+                  <div class="publish-checks">
+                    <div class="settings-row">
+                      <span>当前平台</span>
+                      <strong id="publish-platform">-</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>小红书账号</span>
+                      <strong id="publish-xhs-accounts">0 个已启用</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>抖音账号</span>
+                      <strong id="publish-douyin-accounts">0 个已启用</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>发布图片</span>
+                      <strong id="latest-image-path">-</strong>
+                    </div>
+                  </div>
+
+                  <div class="quick-grid top-gap">
+                    <button class="quick-action" type="button" data-action="execute-xiaohongshu">
+                      <strong>发布到小红书</strong>
+                      <span>一次带上模板页生成的 3 张图片</span>
+                    </button>
+                    <button class="quick-action" type="button" data-action="execute-douyin">
+                      <strong>发布到抖音</strong>
+                      <span>一次带上模板页生成的 3 张图片</span>
+                    </button>
+                    <button class="quick-action" type="button" data-action="execute-publish">
+                      <strong>双平台发布</strong>
+                      <span>默认按同一套 3 张模板图同时发布</span>
+                    </button>
+                    <button class="quick-action" type="button">
+                      <strong>保存草稿</strong>
+                      <span>保留当前标题、文案和图片确认结果</span>
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="page-view" data-view="accounts">
+              <div class="page-grid two-col">
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">账号总览</p>
+                      <h2>账号管理</h2>
+                    </div>
+                    <div class="mini-badge" id="accounts-summary-badge">0 个已启用</div>
+                  </div>
+
+                  <div class="migration-banner" id="accounts-migration-banner" hidden></div>
+
+                  <div class="account-toolbar">
+                    <button class="secondary-action compact" type="button" data-account-open="xiaohongshu">添加小红书账号</button>
+                    <button class="secondary-action compact" type="button" data-account-open="douyin">添加抖音账号</button>
+                  </div>
+
+                  <div class="settings-list top-gap">
+                    <div class="settings-row">
+                      <span>已启用小红书账号</span>
+                      <strong id="accounts-xhs-summary">0</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>已启用抖音账号</span>
+                      <strong id="accounts-douyin-summary">0</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>发布策略</span>
+                      <strong>手动发布和自动化都只使用已启用账号</strong>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">说明</p>
+                      <h2>统一账号模型</h2>
+                    </div>
+                  </div>
+
+                  <div class="content-summary">
+                    <div class="content-preview-block">
+                      <span>添加账号</span>
+                      <p>通过客户端直接发起登录流程，拿到新的登录态，不再把导入旧文件当成主路径。</p>
+                    </div>
+                    <div class="content-preview-block">
+                      <span>账号启用</span>
+                      <p>手动发布和本地自动化都会只读当前已启用账号，不做临时覆盖。</p>
+                    </div>
+                    <div class="content-preview-block">
+                      <span>图片策略</span>
+                      <p>每次发布都继续使用模板页当前生成完成的 3 张图片，一次性发到所有已启用账号。</p>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <div class="page-grid two-col top-gap">
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">小红书</p>
+                      <h2>小红书账号</h2>
+                    </div>
+                    <div class="mini-badge" id="accounts-xhs-badge">0 个账号</div>
+                  </div>
+
+                  <div class="account-list" id="accounts-xhs-list"></div>
+                </article>
+
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">抖音</p>
+                      <h2>抖音账号</h2>
+                    </div>
+                    <div class="mini-badge" id="accounts-douyin-badge">0 个账号</div>
+                  </div>
+
+                  <div class="account-list" id="accounts-douyin-list"></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="page-view" data-view="settings">
+              <div class="page-grid two-col">
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">运行状态</p>
+                      <h2>本机环境</h2>
+                    </div>
+                    <div class="mini-badge" id="env-summary">尚未检查</div>
+                  </div>
+
+                  <div class="env-status-list">
+                    <div class="env-status-item" id="env-config-item">
+                      <span>配置文件</span>
+                      <strong id="env-config">未检查</strong>
+                    </div>
+                    <div class="env-status-item" id="env-image-item">
+                      <span>Dreamina</span>
+                      <strong id="env-image">未检查</strong>
+                    </div>
+                    <div class="env-status-item" id="env-xhs-item">
+                      <span>小红书</span>
+                      <strong id="env-xhs">未检查</strong>
+                    </div>
+                    <div class="env-status-item" id="env-douyin-item">
+                      <span>抖音</span>
+                      <strong id="env-douyin">未检查</strong>
+                    </div>
+                  </div>
+
+                  <div class="device-foot">
+                    <span>最近检查</span>
+                    <strong id="env-checked-at">-</strong>
+                  </div>
+                </article>
+
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">本地自动化</p>
+                      <h2>自动执行设置</h2>
+                    </div>
+                    <div class="mini-badge" id="automation-status-badge">未开启</div>
+                  </div>
+
+                  <div class="settings-list">
+                    <div class="settings-row">
+                      <span>自动化开关</span>
+                      <strong id="automation-enabled-state">关闭</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>每日执行时间</span>
+                      <strong id="automation-daily-time">09:00</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>下次执行</span>
+                      <strong id="automation-next-run">-</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>上次执行</span>
+                      <strong id="automation-last-run">-</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>模板策略</span>
+                      <strong id="automation-template-mode">使用当前已选 3 套模板</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>已启用小红书账号</span>
+                      <strong id="automation-xhs-enabled">0</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>已启用抖音账号</span>
+                      <strong id="automation-douyin-enabled">0</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>最近结果</span>
+                      <strong id="automation-last-result">尚未执行</strong>
+                    </div>
+                  </div>
+
+                  <div class="automation-controls">
+                    <label class="toggle-row" for="automation-enabled-input">
+                      <span>客户端保持开启时，每天自动跑完整流程</span>
+                      <input id="automation-enabled-input" type="checkbox" />
+                    </label>
+                    <label class="time-row" for="automation-time-input">
+                      <span>执行时间</span>
+                      <input id="automation-time-input" type="time" value="09:00" />
+                    </label>
+                  </div>
+
+                  <div class="overview-actions top-gap">
+                    <button class="secondary-action compact" type="button" data-action="save-desktop-automation">保存自动化</button>
+                    <button class="secondary-action compact" type="button" data-action="run-desktop-automation">立即执行一次</button>
+                  </div>
+
+                  <div class="panel-head top-gap">
+                    <div>
+                      <p class="section-label">路径与日志</p>
+                      <h2>运行与设置</h2>
+                    </div>
+                  </div>
+
+                  <div class="settings-list">
+                    <div class="settings-row">
+                      <span>产品名称</span>
+                      <strong id="settings-product-name">染色宝</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>产品根目录</span>
+                      <strong id="settings-root-path">-</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>运行目录</span>
+                      <strong id="settings-runtime-path">-</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>图片目录</span>
+                      <strong id="settings-image-path">-</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>Python 解释器</span>
+                      <strong id="settings-python-bin">-</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>依赖识别</span>
+                      <strong id="settings-dependency-state">尚未识别</strong>
+                    </div>
+                  </div>
+
+                  <pre id="command-log" class="log-block report-log">等待操作…</pre>
+
+                  <div class="overview-actions top-gap">
+                    <button class="secondary-action compact" type="button" data-action="open-onboarding">初始化向导</button>
+                    <button class="secondary-action compact" type="button" data-action="open-outputs">查看输出</button>
+                    <button class="secondary-action compact" type="button" data-action="open-image-folder">查看图片</button>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="template-modal-backdrop" id="template-modal-backdrop" hidden>
+      <div class="template-modal-panel glass-surface">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">选择图片模板</p>
+            <h2 id="template-modal-title">为模板槽位选择样式</h2>
+          </div>
+          <button class="text-button" type="button" id="template-modal-close">关闭</button>
+        </div>
+        <p class="template-modal-copy" id="template-modal-copy">已被其他槽位占用的模板不能重复选择。</p>
+        <div class="template-modal-grid" id="template-modal-grid"></div>
+      </div>
+    </div>
+
+    <div class="image-preview-backdrop" id="image-preview-backdrop" hidden>
+      <div class="image-preview-panel glass-surface">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">图片预览</p>
+            <h2 id="image-preview-title">生成结果大图</h2>
+          </div>
+          <button class="text-button" type="button" id="image-preview-close">关闭</button>
+        </div>
+        <div class="image-preview-frame">
+          <img id="image-preview-image" class="image-preview-image" alt="放大预览图" />
+        </div>
+      </div>
+    </div>
+
+    <div class="account-modal-backdrop" id="account-modal-backdrop" hidden>
+      <div class="account-modal-panel glass-surface">
+        <div class="panel-head">
+          <div>
+            <p class="section-label" id="account-modal-label">添加账号</p>
+            <h2 id="account-modal-title">添加新的发布账号</h2>
+          </div>
+          <button class="text-button" type="button" id="account-modal-close">关闭</button>
+        </div>
+
+        <p class="template-modal-copy" id="account-modal-copy">这一步会调用登录流程，允许弹浏览器或扫码，直到成功拿到登录态。</p>
+
+        <form class="account-modal-form" id="account-modal-form">
+          <label class="time-row" for="account-display-name-input">
+            <span>显示名称</span>
+            <input id="account-display-name-input" type="text" placeholder="例如：门店老板号 / 主账号" />
+          </label>
+          <label class="time-row" for="account-name-input">
+            <span>账号标识</span>
+            <input id="account-name-input" type="text" placeholder="例如：xhs-main / douyin-store-a" />
+          </label>
+
+          <div class="overview-actions top-gap">
+            <button class="secondary-action compact" type="submit" id="account-modal-submit">开始登录</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="onboarding-backdrop" id="onboarding-backdrop" hidden>
+      <div class="onboarding-panel glass-surface">
+        <div class="panel-head">
+          <div>
+            <p class="section-label" id="onboarding-label">首次启动向导</p>
+            <h2 id="onboarding-title">先把本地客户端初始化到可运行状态</h2>
+          </div>
+          <button class="text-button" type="button" id="onboarding-close">稍后继续</button>
+        </div>
+
+        <p class="template-modal-copy" id="onboarding-copy">先确认安装包资源、完成 sau / Chromium / Dreamina 初始化，再补本地目录和账号，后面整条流程就能在客户机上独立跑起来。</p>
+
+        <div class="onboarding-summary-row">
+          <div class="mini-badge" id="onboarding-summary-badge">准备中</div>
+          <strong id="onboarding-summary-text">正在读取首次启动状态</strong>
+        </div>
+
+        <div class="onboarding-step-grid" id="onboarding-step-grid"></div>
+
+        <article class="panel-card onboarding-config-card">
+          <div class="panel-head">
+            <div>
+              <p class="section-label">步骤 1 - 3</p>
+              <h2>安装初始化</h2>
+            </div>
+            <button class="text-button" type="button" data-action="inspect-bundled-dependencies">刷新安装状态</button>
+          </div>
+
+          <div class="onboarding-summary-card">
+            <div class="onboarding-summary-copy">
+              <span>安装摘要</span>
+              <p id="onboarding-install-summary">先确认程序资源和内置 Python，再安装 sau、Chromium 和 Dreamina。</p>
+            </div>
+            <div class="onboarding-summary-actions">
+              <button class="secondary-action compact" type="button" data-action="inspect-bundled-dependencies">重新检测</button>
+            </div>
+          </div>
+
+          <div class="onboarding-install-grid" id="onboarding-install-grid"></div>
+        </article>
+
+        <article class="panel-card onboarding-config-card">
+          <div class="panel-head">
+            <div>
+              <p class="section-label">步骤 4</p>
+              <h2>本地目录</h2>
+            </div>
+            <button class="text-button" type="button" data-page-jump="settings">去设置页看详情</button>
+          </div>
+
+          <div class="onboarding-summary-card">
+            <div class="onboarding-summary-copy">
+              <span>自动识别</span>
+              <p id="onboarding-dependency-summary">还没有识别本机依赖，先点一次自动识别会更省事。</p>
+            </div>
+            <div class="onboarding-summary-actions">
+              <button class="secondary-action compact" type="button" data-action="inspect-dependencies">自动识别本机依赖</button>
+            </div>
+          </div>
+
+          <div class="onboarding-form-shell">
+            <div class="onboarding-form-head">
+              <div>
+                <strong>初始化依赖表单</strong>
+                <p>先把 5 个关键路径补齐。已经自动识别到的内容可以直接微调后保存，不需要再逐项拆开配置。</p>
+              </div>
+            </div>
+
+            <div class="onboarding-path-list">
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
+                  <label for="onboarding-python-bin">Python 解释器</label>
+                  <small>客户端调用引擎和 Dreamina 子脚本时使用</small>
+                </div>
+                <div class="path-input-row">
+                  <input id="onboarding-python-bin" type="text" placeholder="/path/to/python3 或 python3" />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="onboarding-python-bin" data-pick-kind="file" data-pick-title="选择 Python 解释器">选择</button>
+                </div>
+              </div>
+
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
+                  <label for="onboarding-dreamina-root">Dreamina 根目录</label>
+                  <small>图片生成主适配器的本地目录</small>
+                </div>
+                <div class="path-input-row">
+                  <input id="onboarding-dreamina-root" type="text" placeholder="/path/to/dreamina-cli" />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="onboarding-dreamina-root" data-pick-kind="directory" data-pick-title="选择 Dreamina 根目录">选择</button>
+                </div>
+              </div>
+
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
+                  <label for="onboarding-device-dir">设备图目录</label>
+                  <small>会作为参考图参与模板生成</small>
+                </div>
+                <div class="path-input-row">
+                  <input id="onboarding-device-dir" type="text" placeholder="/path/to/device-images" />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="onboarding-device-dir" data-pick-kind="directory" data-pick-title="选择设备图目录">选择</button>
+                </div>
+              </div>
+
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
+                  <label for="onboarding-downloads-dir">生成图片目录</label>
+                  <small>Dreamina 下载结果和发布读取都从这里走</small>
+                </div>
+                <div class="path-input-row">
+                  <input id="onboarding-downloads-dir" type="text" placeholder="/path/to/jimeng-downloads" />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="onboarding-downloads-dir" data-pick-kind="directory" data-pick-title="选择生成图片目录">选择</button>
+                </div>
+              </div>
+
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
+                  <label for="onboarding-sau-root">发布工具根目录</label>
+                  <small>小红书和抖音登录、检测、发布都依赖它</small>
+                </div>
+                <div class="path-input-row">
+                  <input id="onboarding-sau-root" type="text" placeholder="/path/to/social-auto-upload" />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="onboarding-sau-root" data-pick-kind="directory" data-pick-title="选择发布工具根目录">选择</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="onboarding-primary-actions">
+              <button class="secondary-action compact" type="button" data-action="save-local-config">保存本地路径</button>
+              <button class="secondary-action compact" type="button" data-action="check-environment">检查环境</button>
+            </div>
+          </div>
+        </article>
+
+        <div class="page-grid two-col top-gap onboarding-followup-grid">
+          <article class="panel-card onboarding-support-card">
+            <div class="panel-head">
+              <div>
+                <p class="section-label">步骤 3</p>
+                <h2>账号登录</h2>
+              </div>
+              <button class="text-button" type="button" data-page-jump="accounts">打开账号管理</button>
+            </div>
+
+            <div class="onboarding-inline-summary">
+              <span>当前已启用账号</span>
+              <strong id="onboarding-accounts-summary">还没有可用账号</strong>
+            </div>
+
+            <div class="onboarding-callout">
+              <strong>推荐动作</strong>
+              <p>先登录一个小红书或抖音账号。后面的手动发布和每日自动化都会直接复用这里的已启用账号。</p>
+            </div>
+
+            <div class="onboarding-action-stack">
+              <button class="secondary-action compact" type="button" data-account-open="xiaohongshu">添加小红书账号</button>
+              <button class="secondary-action compact" type="button" data-account-open="douyin">添加抖音账号</button>
+            </div>
+          </article>
+
+          <article class="panel-card onboarding-support-card">
+            <div class="panel-head">
+              <div>
+                <p class="section-label">步骤 4</p>
+                <h2>自动化默认值</h2>
+              </div>
+              <button class="text-button" type="button" data-page-jump="settings">打开设置页</button>
+            </div>
+
+            <div class="onboarding-inline-summary">
+              <span>默认策略</span>
+              <strong>客户端保持开启时，按固定时间跑完整流程</strong>
+            </div>
+
+            <div class="automation-controls onboarding-automation-controls">
+              <label class="toggle-row" for="onboarding-automation-enabled">
+                <span>客户端保持开启时，每天自动跑完整流程</span>
+                <input id="onboarding-automation-enabled" type="checkbox" />
+              </label>
+              <label class="time-row" for="onboarding-automation-time">
+                <span>执行时间</span>
+                <input id="onboarding-automation-time" type="time" value="09:00" />
+              </label>
+            </div>
+            <div class="onboarding-action-stack top-gap">
+              <button class="secondary-action compact" type="button" data-action="save-onboarding-automation">保存自动化默认值</button>
+              <button class="secondary-action compact" type="button" data-action="complete-onboarding">进入工作台</button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="dependency-log-backdrop" id="dependency-log-backdrop" hidden>
+      <div class="dependency-log-panel glass-surface">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">安装日志</p>
+            <h2 id="dependency-log-title">依赖日志</h2>
+          </div>
+          <button class="text-button" type="button" id="dependency-log-close">关闭</button>
+        </div>
+        <p class="template-modal-copy" id="dependency-log-copy">这里会显示最新一次安装或检测输出，失败时可以直接拿来定位问题。</p>
+        <pre class="dependency-log-text" id="dependency-log-text">还没有日志。</pre>
+      </div>
+    </div>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,60 @@
+{
+  "selection": {
+    "prefer_hot_when_available": true
+  },
+  "duplicate_risk_penalty": {
+    "low": 0,
+    "medium": -12,
+    "high": -30
+  },
+  "route_mode_preferences": {
+    "brand_fallback": {
+      "content_type_bonus": {
+        "门店经营": 12,
+        "顾客认知": 9,
+        "产品价值": 8,
+        "AI 美业": 6,
+        "招商合作": 5,
+        "趋势洞察": 4
+      },
+      "audience_bonus": {
+        "门店老板": 6,
+        "染发顾客": 4,
+        "门店从业者": 3,
+        "潜在合作方": 2
+      },
+      "platform_bonus": {
+        "小红书": 3,
+        "抖音": 2
+      }
+    },
+    "hot_priority": {
+      "source_mode_bonus": {
+        "热点关联": 15,
+        "品牌常规": 0
+      },
+      "content_type_bonus": {
+        "趋势洞察": 8,
+        "门店经营": 7,
+        "顾客认知": 6,
+        "产品价值": 5,
+        "AI 美业": 5,
+        "招商合作": 4
+      }
+    },
+    "hot_plus_brand_fill": {
+      "source_mode_bonus": {
+        "热点关联": 12,
+        "品牌常规": 0
+      },
+      "content_type_bonus": {
+        "门店经营": 7,
+        "顾客认知": 6,
+        "产品价值": 5,
+        "AI 美业": 5,
+        "招商合作": 4,
+        "趋势洞察": 4
+      }
+    }
+  }
+}

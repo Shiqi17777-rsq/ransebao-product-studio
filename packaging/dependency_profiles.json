@@ -1,0 +1,47 @@
+{
+  "python_bin": {
+    "label": "Python 解释器",
+    "kind": "command",
+    "candidates": [
+      "/opt/homebrew/bin/python3",
+      "/usr/local/bin/python3",
+      "python3",
+      "python"
+    ]
+  },
+  "dreamina_cli_root": {
+    "label": "Dreamina CLI 根目录",
+    "kind": "path",
+    "candidates": [
+      "<runtimeBaseDir>/vendor/dreamina/bin/dreamina.exe",
+      "<runtimeBaseDir>/vendor/dreamina/bin/dreamina",
+      "~/.local/bin/dreamina",
+      "~/.openclaw/skills/dreamina-cli"
+    ]
+  },
+  "sau_root": {
+    "label": "social-auto-upload 根目录",
+    "kind": "directory",
+    "candidates": [
+      "<runtimeBaseDir>/vendor/sau-venv",
+      "<productStudioRoot>/../social-auto-upload",
+      "~/Documents/Playground/social-auto-upload"
+    ]
+  },
+  "device_image_dir": {
+    "label": "设备图目录",
+    "kind": "directory",
+    "candidates": [
+      "~/Desktop/染色宝设备图片",
+      "~/Desktop/device-images"
+    ]
+  },
+  "downloads_dir": {
+    "label": "生成图片目录",
+    "kind": "directory",
+    "candidates": [
+      "~/Desktop/jimeng-downloads",
+      "~/Downloads/jimeng-downloads"
+    ]
+  }
+}

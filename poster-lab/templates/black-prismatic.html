@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>黑底炫彩版海报预览</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #08090d;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        font-family:
+          "SF Pro Display",
+          -apple-system,
+          BlinkMacSystemFont,
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Helvetica Neue",
+          Arial,
+          sans-serif;
+      }
+
+      .poster {
+        position: relative;
+        width: 1440px;
+        height: 2560px;
+        overflow: hidden;
+        background:
+          linear-gradient(180deg, rgba(6, 8, 12, 0.52) 0%, rgba(5, 7, 10, 0.1) 28%, rgba(7, 8, 10, 0.02) 60%, rgba(6, 7, 9, 0.18) 100%),
+          radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.08), transparent 26%),
+          var(--poster-image) center / cover no-repeat;
+      }
+
+      .poster::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.08), transparent 16%),
+          radial-gradient(circle at 82% 72%, rgba(121, 135, 255, 0.08), transparent 18%),
+          radial-gradient(circle at 52% 50%, rgba(255, 255, 255, 0.035), transparent 28%);
+        pointer-events: none;
+      }
+
+      .brand {
+        position: absolute;
+        top: 56px;
+        left: 54px;
+        width: 290px;
+        filter: drop-shadow(0 8px 18px rgba(8, 10, 14, 0.42));
+      }
+
+      .brand img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .top-mask {
+        position: absolute;
+        top: 38px;
+        right: 46px;
+        width: 160px;
+        height: 160px;
+        border-radius: 999px;
+        background:
+          radial-gradient(circle at 50% 50%, rgba(12, 15, 19, 0.82), rgba(8, 10, 14, 0.96) 72%, rgba(7, 9, 12, 0.98) 100%);
+        box-shadow:
+          0 0 36px rgba(10, 12, 16, 0.55),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(22px);
+      }
+
+      .headline {
+        position: absolute;
+        top: 300px;
+        left: 112px;
+        right: 112px;
+        display: grid;
+        gap: 26px;
+        justify-items: center;
+        text-align: center;
+      }
+
+      .headline h1 {
+        margin: 0;
+        max-width: 1080px;
+        font-size: 96px;
+        line-height: 1.04;
+        letter-spacing: -0.045em;
+        font-weight: 700;
+        color: rgba(246, 248, 252, 0.98);
+        text-wrap: balance;
+        text-shadow:
+          0 2px 0 rgba(255, 255, 255, 0.08),
+          0 18px 30px rgba(6, 8, 12, 0.42);
+      }
+
+      .headline p {
+        margin: 0;
+        max-width: 860px;
+        font-size: 38px;
+        line-height: 1.34;
+        letter-spacing: -0.022em;
+        font-weight: 500;
+        color: rgba(226, 231, 239, 0.9);
+        text-wrap: balance;
+        text-shadow: 0 10px 18px rgba(7, 9, 13, 0.34);
+      }
+
+      .points {
+        position: absolute;
+        left: 86px;
+        right: 86px;
+        bottom: 92px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 28px;
+      }
+
+      .point-card {
+        min-height: 168px;
+        border-radius: 28px;
+        display: grid;
+        place-items: center;
+        padding: 26px 30px;
+        text-align: center;
+        background:
+          linear-gradient(180deg, rgba(48, 53, 62, 0.36), rgba(24, 28, 34, 0.26)),
+          rgba(12, 15, 19, 0.2);
+        border: 1px solid rgba(232, 236, 242, 0.18);
+        box-shadow:
+          0 18px 40px rgba(6, 8, 12, 0.26),
+          inset 0 1px 0 rgba(255, 255, 255, 0.16),
+          inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+        backdrop-filter: blur(22px) saturate(130%);
+      }
+
+      .point-card span {
+        display: block;
+        max-width: 92%;
+        font-size: 44px;
+        line-height: 1.16;
+        letter-spacing: -0.028em;
+        font-weight: 600;
+        color: rgba(244, 247, 250, 0.95);
+        text-shadow: 0 6px 18px rgba(7, 9, 12, 0.28);
+        text-wrap: balance;
+      }
+    </style>
+  </head>
+  <body>
+    <article class="poster" id="poster">
+      <div class="top-mask"></div>
+      <div class="brand" id="brand">
+        <img id="brand-image" alt="染色宝 logo" />
+      </div>
+      <section class="headline">
+        <h1 id="headline"></h1>
+        <p id="subtitle"></p>
+      </section>
+      <section class="points" id="points"></section>
+    </article>
+
+    <script>
+      const data = window.__POSTER_DATA__ || {};
+
+      function waitForImage(img, src) {
+        return new Promise((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = src;
+        });
+      }
+
+      function render() {
+        const poster = document.getElementById("poster");
+        const headline = document.getElementById("headline");
+        const subtitle = document.getElementById("subtitle");
+        const points = document.getElementById("points");
+        const brandImage = document.getElementById("brand-image");
+
+        poster.style.setProperty("--poster-image", `url("${data.baseImageUrl}")`);
+        headline.textContent = data.headline || "";
+        subtitle.textContent = data.subtitle || "";
+
+        points.innerHTML = "";
+        (data.points || []).forEach((point) => {
+          const card = document.createElement("article");
+          card.className = "point-card";
+          const text = document.createElement("span");
+          text.textContent = point;
+          card.appendChild(text);
+          points.appendChild(card);
+        });
+
+        return Promise.all([
+          document.fonts ? document.fonts.ready : Promise.resolve(),
+          waitForImage(brandImage, data.logoImageUrl),
+        ]).then(() => {
+          window.__POSTER_READY__ = true;
+        });
+      }
+
+      render().catch((error) => {
+        console.error(error);
+        window.__POSTER_READY__ = "error";
+      });
+    </script>
+  </body>
+</html>

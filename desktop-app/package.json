@@ -1,0 +1,81 @@
+{
+  "name": "ransebao-desktop-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "染色宝 Product Studio 桌面壳",
+  "main": "main.js",
+  "scripts": {
+    "install:mirror": "ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm install --fetch-timeout=600000 --fetch-retries=5",
+    "start": "unset ELECTRON_RUN_AS_NODE && electron .",
+    "prepare:bundle": "node ../packaging/scripts/prepare_bundle_assets.mjs",
+    "build:mac": "node ../packaging/scripts/prepare_bundle_assets.mjs --target mac-arm64 && electron-builder --mac dmg --arm64",
+    "build:mac-dir": "node ../packaging/scripts/prepare_bundle_assets.mjs --target mac-arm64 && electron-builder --mac dir --arm64",
+    "build:win": "node ../packaging/scripts/prepare_bundle_assets.mjs --target win-x64 && electron-builder --win nsis --x64",
+    "build:win-portable": "node ../packaging/scripts/prepare_bundle_assets.mjs --target win-x64 && electron-builder --win portable --x64 -c.win.artifactName='Ransebao-Product-Studio-${version}-win-${arch}-portable.exe'",
+    "verify:dist": "node ../packaging/scripts/verify_dist_bundle.mjs"
+  },
+  "devDependencies": {
+    "electron": "^35.1.4",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.ransebao.productstudio",
+    "productName": "Ransebao Product Studio",
+    "directories": {
+      "output": "release"
+    },
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "scripts/**/*",
+      "launch_desktop_app.sh",
+      "README.md",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../packaging/bundle-staging/product-studio",
+        "to": "product-studio"
+      },
+      {
+        "from": "../packaging/bundle-staging/vendor",
+        "to": "vendor"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "Ransebao-Product-Studio-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Ransebao-Product-Studio-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

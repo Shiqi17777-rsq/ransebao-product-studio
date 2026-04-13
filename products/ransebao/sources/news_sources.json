@@ -1,0 +1,133 @@
+{
+  "brand_name": "染色宝",
+  "timezone": "Asia/Shanghai",
+  "fetch_defaults": {
+    "days": 7,
+    "per_source_limit": 15,
+    "user_agent": "Mozilla/5.0 (compatible; ProductStudioNewsPool/1.0)"
+  },
+  "thresholds": {
+    "hot": 70,
+    "backup": 40
+  },
+  "gates": {
+    "require_vertical_signal_for_hot": true,
+    "require_vertical_signal_for_backup": true
+  },
+  "vertical_keywords": [
+    "美发",
+    "美业",
+    "理发",
+    "沙龙",
+    "染发",
+    "染膏",
+    "发色",
+    "白发",
+    "头皮",
+    "护发"
+  ],
+  "sources": [
+    {
+      "id": "hair-industry-trends",
+      "kind": "google_news_search",
+      "query": "美发行业 OR 美业趋势"
+    },
+    {
+      "id": "hair-color-demand",
+      "kind": "google_news_search",
+      "query": "染发 OR 白发遮盖 OR 染发需求"
+    },
+    {
+      "id": "salon-operations",
+      "kind": "google_news_search",
+      "query": "门店经营 OR 理发店经营 OR 降本增效"
+    },
+    {
+      "id": "beauty-ai",
+      "kind": "google_news_search",
+      "query": "AI 美业 OR 智能美业 OR 智能染发"
+    },
+    {
+      "id": "beauty-franchise",
+      "kind": "google_news_search",
+      "query": "美业招商 OR 美发加盟 OR 门店合作"
+    }
+  ],
+  "keyword_groups": {
+    "门店经营": [
+      "门店",
+      "理发店",
+      "美发店",
+      "经营",
+      "降本增效",
+      "库存",
+      "利润",
+      "培训",
+      "效率",
+      "复制"
+    ],
+    "顾客痛点": [
+      "刺激",
+      "伤发",
+      "翻车",
+      "选色",
+      "头皮敏感",
+      "白发",
+      "顾虑"
+    ],
+    "染发需求": [
+      "染发",
+      "白发遮盖",
+      "染膏",
+      "配色",
+      "发色"
+    ],
+    "标准化智能化": [
+      "标准化",
+      "智能化",
+      "数字化",
+      "智能染发",
+      "数字化配方"
+    ],
+    "AI美业": [
+      "AI",
+      "智能推荐",
+      "智能咨询",
+      "智能设备",
+      "美业数字化"
+    ],
+    "招商合作": [
+      "招商",
+      "加盟",
+      "合作",
+      "代理",
+      "分润"
+    ]
+  },
+  "audience_map": {
+    "门店经营": [
+      "门店老板",
+      "潜在合作方"
+    ],
+    "顾客痛点": [
+      "染发顾客",
+      "门店从业者"
+    ],
+    "染发需求": [
+      "染发顾客",
+      "门店从业者"
+    ],
+    "标准化智能化": [
+      "门店老板",
+      "门店从业者"
+    ],
+    "AI美业": [
+      "门店老板",
+      "潜在合作方"
+    ],
+    "招商合作": [
+      "潜在合作方",
+      "门店老板"
+    ]
+  }
+}

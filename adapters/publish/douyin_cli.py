@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from .account_registry import enabled_accounts, publish_headed, resolve_sau_bin, resolve_sau_env, resolve_sau_root
+
+
+def _normalize_publish_images(image_paths: list[str] | None) -> list[str]:
+    normalized: list[str] = []
+    for raw_path in image_paths or []:
+        value = str(raw_path).strip()
+        if not value:
+            continue
+        path = Path(value)
+        if not path.is_file():
+            continue
+        resolved = str(path)
+        if resolved in normalized:
+            continue
+        normalized.append(resolved)
+    return normalized
+
+
+def plan_publish(
+    prompt_env: dict[str, Any],
+    local_config: dict[str, Any],
+    publish_images: list[str] | None = None,
+) -> dict[str, Any]:
+    publish_cfg = local_config.get("publish", {})
+    root = resolve_sau_root(local_config)
+    sau_bin = resolve_sau_bin(root)
+    sau_env = resolve_sau_env(local_config)
+    accounts = enabled_accounts(local_config, "douyin")
+    headed = publish_headed(local_config, "douyin")
+    image_dir = publish_cfg.get("image_dir", "").strip()
+    images = _normalize_publish_images(publish_images)
+
+    note_text = prompt_env["publish"]["douyin_note_text"]
+    title = prompt_env["publish"]["title"]
+    tags = prompt_env["publish"]["tags"]
+
+    account_plans: list[dict[str, Any]] = []
+    for account in accounts:
+        argv = [
+            sau_bin,
+            "douyin",
+            "upload-note",
+            "--account",
+            account["accountName"],
+            "--images",
+            *images,
+            "--title",
+            title,
+            "--note",
+            note_text,
+        ]
+        if tags:
+            argv.extend(["--tags", tags])
+        argv.append("--headed" if headed else "--headless")
+
+        command = (
+            f"cd {root} && "
+            f"{sau_bin} douyin upload-note --account '{account['accountName']}' --images "
+            + " ".join(f"'{image_path}'" for image_path in images)
+            + f" --title '{title}' --note '{note_text}'"
+        )
+        if tags:
+            command += f" --tags '{tags}'"
+        command += f" {'--headed' if headed else '--headless'}"
+
+        account_plans.append(
+            {
+                "accountName": account["accountName"],
+                "displayName": account["displayName"],
+                "argv": argv,
+                "env": sau_env,
+                "planned_command": command,
+            }
+        )
+
+    return {
+        "adapter": "douyin-sau",
+        "platform": "douyin",
+        "ready": bool(root and len(images) >= 3 and account_plans),
+        "root": root,
+        "cwd": root or None,
+        "sau_bin": sau_bin,
+        "env": sau_env,
+        "headed": headed,
+        "image_dir": image_dir,
+        "images": images,
+        "latest_image": images[0] if images else None,
+        "title": title,
+        "note": note_text,
+        "tags": tags,
+        "accounts": accounts,
+        "account_plans": account_plans,
+        "planned_command": "\n".join(
+            plan["planned_command"] for plan in account_plans if plan.get("planned_command")
+        ),
+        "notes": [
+            "当前会使用 sau 的 douyin account_name 模型逐个已启用账号发布。",
+            "多账号发布会重复使用同一组 3 张模板图。",
+            "当前发布会优先使用模板页选中的 3 张生成结果。",
+        ],
+    }
