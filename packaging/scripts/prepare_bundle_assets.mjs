@@ -476,7 +476,19 @@ function preparePythonRuntime(pythonBin) {
 }
 
 function prepareSauBundle(pythonBin) {
-  const sauRoot = process.env.PRODUCT_STUDIO_SAU_SOURCE || path.join(playgroundRoot, "social-auto-upload");
+  const sauRootCandidates = process.env.PRODUCT_STUDIO_SAU_SOURCE
+    ? [process.env.PRODUCT_STUDIO_SAU_SOURCE]
+    : [
+        path.join(playgroundRoot, "ransebao-social-auto-upload"),
+        path.join(playgroundRoot, "social-auto-upload")
+      ];
+  const sauRoot = sauRootCandidates.find((candidate) => fs.existsSync(candidate));
+  if (!sauRoot) {
+    throw new Error(
+      `social-auto-upload source not found. Tried: ${sauRootCandidates.join(", ")}. ` +
+        "Set PRODUCT_STUDIO_SAU_SOURCE to a usable fork/source directory."
+    );
+  }
   const sauBuildSourceRoot = stageSauSource(sauRoot, sauBuildSourceStage);
   if (includeSauSource) {
     stageSauSource(sauRoot, sauSourceStage);

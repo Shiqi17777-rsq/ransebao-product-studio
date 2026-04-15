@@ -24,7 +24,9 @@
     "kind": "directory",
     "candidates": [
       "<runtimeBaseDir>/vendor/sau-venv",
+      "<productStudioRoot>/../ransebao-social-auto-upload",
       "<productStudioRoot>/../social-auto-upload",
+      "~/Documents/Playground/ransebao-social-auto-upload",
       "~/Documents/Playground/social-auto-upload"
     ]
   },

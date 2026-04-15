@@ -930,8 +930,11 @@ async function runSauAccountCommand(platform, action, accountName, options = {})
 function bundledSauSourceRoot() {
   const bundled = path.join(bundledSauBundleRoot, "source", "social-auto-upload");
   if (fs.existsSync(bundled)) return bundled;
-  const devSource = path.resolve(productStudioRoot, "..", "social-auto-upload");
-  return fs.existsSync(devSource) ? devSource : "";
+  const devSources = [
+    path.resolve(productStudioRoot, "..", "ransebao-social-auto-upload"),
+    path.resolve(productStudioRoot, "..", "social-auto-upload")
+  ];
+  return devSources.find((candidate) => fs.existsSync(candidate)) || "";
 }
 
 function bundledSauWheelhouseRoot() {

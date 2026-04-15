@@ -254,23 +254,25 @@ Windows 打包脚本当前会在准备 bundle 时构建 `social-auto-upload` whe
 
 默认查找位置：
 
-- `Playground/social-auto-upload`
+- `Playground/ransebao-social-auto-upload`
+- `Playground/social-auto-upload`（兼容旧目录）
 
 当前开发机真实路径：
 
 - macOS：
-  - `/Users/leo-jaeger/Documents/Playground/social-auto-upload`
+  - `/Users/leo-jaeger/Documents/Playground/ransebao-social-auto-upload`
 - Windows 建议路径：
-  - `C:\\Users\\81361\\Documents\\Playground\\social-auto-upload`
+  - `C:\\Users\\81361\\Documents\\Playground\\ransebao-social-auto-upload`
 
 源码仓库地址：
 
-- `https://github.com/dreammis/social-auto-upload.git`
+- `https://github.com/Shiqi17777-rsq/ransebao-social-auto-upload.git`
+- 上游参考：`https://github.com/dreammis/social-auto-upload.git`
 
 如果 Windows 本机不放在默认同级目录，也可以显式指定：
 
 ```powershell
-$env:PRODUCT_STUDIO_SAU_SOURCE="D:\\your-path\\social-auto-upload"
+$env:PRODUCT_STUDIO_SAU_SOURCE="D:\\your-path\\ransebao-social-auto-upload"
 cd desktop-app
 npm run build:win-portable
 ```
