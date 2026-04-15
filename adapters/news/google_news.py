@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import html
 import re
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from urllib.error import URLError
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
@@ -28,10 +30,21 @@ def stable_id(*parts: str) -> str:
     return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:16]
 
 
-def fetch_xml(url: str, user_agent: str) -> bytes:
+def fetch_xml(url: str, user_agent: str, attempts: int = 3, timeout: int = 30) -> bytes:
     req = Request(url, headers={"User-Agent": user_agent})
-    with urlopen(req, timeout=30) as resp:
-        return resp.read()
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except Exception as exc:
+            last_error = exc
+            if attempt >= attempts:
+                raise
+            time.sleep(min(attempt, 3))
+    if last_error:
+        raise last_error
+    raise URLError("Unknown Google News fetch error")
 
 
 def parse_rss(payload: bytes, source_id: str, source_name: str, source_url: str) -> list[dict]:
@@ -76,7 +89,10 @@ def fetch_sources(config: dict, days: int | None = None, limit: int | None = Non
         if source["kind"] != "google_news_search":
             continue
         url = build_google_news_url(source["query"], lookback_days)
-        payload = fetch_xml(url, user_agent=user_agent)
+        try:
+            payload = fetch_xml(url, user_agent=user_agent)
+        except Exception:
+            continue
         rows = parse_rss(payload, source["id"], source["query"], url)[:per_source_limit]
         all_rows.extend(rows)
     return all_rows

@@ -26,8 +26,20 @@ function firstExisting(candidates) {
   return "";
 }
 
-function locateAppBundle(inputPath = "") {
-  if (inputPath && fs.existsSync(inputPath)) return inputPath;
+function assertExists(targetPath, label) {
+  if (!fs.existsSync(targetPath)) {
+    fail(`Missing ${label}: ${targetPath}`);
+  }
+}
+
+function assertMissing(targetPath, label) {
+  if (fs.existsSync(targetPath)) {
+    fail(`Found unexpected ${label}: ${targetPath}`);
+  }
+}
+
+function locateMacBundle(inputPath = "") {
+  if (inputPath && fs.existsSync(inputPath) && inputPath.endsWith(".app")) return inputPath;
   const releaseEntries = fs.existsSync(releaseRoot) ? fs.readdirSync(releaseRoot) : [];
   const directApp = releaseEntries
     .filter((entry) => entry.endsWith(".app"))
@@ -41,42 +53,71 @@ function locateAppBundle(inputPath = "") {
   return "";
 }
 
-function assertExists(targetPath, label) {
-  if (!fs.existsSync(targetPath)) {
-    fail(`缺少 ${label}: ${targetPath}`);
+function locateWindowsUnpacked(inputPath = "") {
+  if (inputPath && fs.existsSync(inputPath)) {
+    const stat = fs.statSync(inputPath);
+    if (stat.isDirectory() && path.basename(inputPath) === "win-unpacked") {
+      return inputPath;
+    }
+    if (stat.isFile() && inputPath.toLowerCase().endsWith(".exe")) {
+      const sibling = path.join(path.dirname(inputPath), "win-unpacked");
+      if (fs.existsSync(sibling)) return sibling;
+    }
   }
+  const candidate = path.join(releaseRoot, "win-unpacked");
+  return fs.existsSync(candidate) ? candidate : "";
 }
 
-function assertMissing(targetPath, label) {
-  if (fs.existsSync(targetPath)) {
-    fail(`发现不应该打包进去的 ${label}: ${targetPath}`);
+function resolveBundleTarget(inputPath = "") {
+  const macBundlePath = locateMacBundle(inputPath);
+  if (macBundlePath) {
+    return {
+      platform: "mac",
+      label: macBundlePath,
+      resourcesPath: path.join(macBundlePath, "Contents", "Resources"),
+      bundledPythonCandidates: [
+        path.join(macBundlePath, "Contents", "Resources", "vendor", "python-runtime", "bin", "python3"),
+        path.join(macBundlePath, "Contents", "Resources", "vendor", "python-runtime", "bin", "python")
+      ]
+    };
   }
+
+  const windowsUnpackedPath = locateWindowsUnpacked(inputPath);
+  if (windowsUnpackedPath) {
+    return {
+      platform: "win",
+      label: windowsUnpackedPath,
+      resourcesPath: path.join(windowsUnpackedPath, "resources"),
+      bundledPythonCandidates: [
+        path.join(windowsUnpackedPath, "resources", "vendor", "python-runtime", "python.exe"),
+        path.join(windowsUnpackedPath, "resources", "vendor", "python-runtime", "python3.exe")
+      ]
+    };
+  }
+
+  return null;
 }
 
 const requestedPath = process.argv[2] ? path.resolve(process.argv[2]) : "";
-const appBundlePath = locateAppBundle(requestedPath);
-if (!appBundlePath) {
-  fail("未找到 .app 产物，请先运行 build:mac 或 build:mac-dir。");
+const target = resolveBundleTarget(requestedPath);
+if (!target) {
+  fail("No macOS .app or Windows win-unpacked bundle found. Run build:mac/build:mac-dir or build:win/build:win-portable first.");
 }
 
-const resourcesPath = path.join(appBundlePath, "Contents", "Resources");
-const bundledProductStudioRoot = path.join(resourcesPath, "product-studio");
-const bundledVendorRoot = path.join(resourcesPath, "vendor");
-const bundledPythonBin = firstExisting([
-  path.join(bundledVendorRoot, "python-runtime", "bin", "python3"),
-  path.join(bundledVendorRoot, "python-runtime", "bin", "python")
-]);
+const bundledProductStudioRoot = path.join(target.resourcesPath, "product-studio");
+const bundledVendorRoot = path.join(target.resourcesPath, "vendor");
+const bundledPythonBin = firstExisting(target.bundledPythonCandidates);
 
-info(`Checking bundle: ${appBundlePath}`);
-assertExists(resourcesPath, "Resources 目录");
+info(`Checking ${target.platform} bundle: ${target.label}`);
+assertExists(target.resourcesPath, "resources directory");
 assertExists(path.join(bundledProductStudioRoot, "engine", "cli.py"), "product-studio engine.cli");
-assertExists(path.join(bundledProductStudioRoot, "products", "ransebao", "product.json"), "产品包");
+assertExists(path.join(bundledProductStudioRoot, "products", "ransebao", "product.json"), "ransebao product config");
 assertExists(path.join(bundledProductStudioRoot, "runtime", "config", "local.example.json"), "local.example.json");
 assertExists(path.join(bundledProductStudioRoot, "packaging", "dependency_profiles.json"), "dependency_profiles.json");
 if (!bundledPythonBin) {
-  fail("未找到内置 Python 二进制。");
+  fail("Bundled Python binary not found.");
 }
-assertExists(path.join(bundledVendorRoot, "sau-bundle"), "sau 安装材料目录");
+assertExists(path.join(bundledVendorRoot, "sau-bundle"), "sau bundle directory");
 
 assertMissing(path.join(bundledProductStudioRoot, "runtime", "config", "local.json"), "local.json");
 assertMissing(path.join(bundledProductStudioRoot, "runtime", "config", "publish_accounts.json"), "publish_accounts.json");

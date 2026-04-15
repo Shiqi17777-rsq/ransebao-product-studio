@@ -3,7 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .account_registry import enabled_accounts, publish_headed, resolve_sau_bin, resolve_sau_env, resolve_sau_root
+from .account_registry import (
+    enabled_accounts,
+    publish_headed,
+    publish_private,
+    resolve_sau_bin,
+    resolve_sau_env,
+    resolve_sau_root,
+)
 
 
 def _normalize_publish_images(image_paths: list[str] | None) -> list[str]:
@@ -33,6 +40,7 @@ def plan_publish(
     sau_env = resolve_sau_env(local_config)
     accounts = enabled_accounts(local_config, "douyin")
     headed = publish_headed(local_config, "douyin")
+    private_publish = publish_private(local_config, "douyin")
     image_dir = publish_cfg.get("image_dir", "").strip()
     images = _normalize_publish_images(publish_images)
 
@@ -57,6 +65,8 @@ def plan_publish(
         ]
         if tags:
             argv.extend(["--tags", tags])
+        if private_publish:
+            argv.append("--private")
         argv.append("--headed" if headed else "--headless")
 
         command = (
@@ -67,6 +77,8 @@ def plan_publish(
         )
         if tags:
             command += f" --tags '{tags}'"
+        if private_publish:
+            command += " --private"
         command += f" {'--headed' if headed else '--headless'}"
 
         account_plans.append(
@@ -88,6 +100,7 @@ def plan_publish(
         "sau_bin": sau_bin,
         "env": sau_env,
         "headed": headed,
+        "private": private_publish,
         "image_dir": image_dir,
         "images": images,
         "latest_image": images[0] if images else None,

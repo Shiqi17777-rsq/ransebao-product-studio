@@ -671,9 +671,13 @@ function writeLocalRuntimeConfig(payload = {}) {
         payload.patchrightBrowsersPath ?? current?.publish?.patchright_browsers_path
       ),
       xiaohongshu: {
+        private: (current?.publish?.xiaohongshu?.private ?? true),
+        headed: (current?.publish?.xiaohongshu?.headed ?? true),
         ...((current?.publish || {}).xiaohongshu || {})
       },
       douyin: {
+        private: (current?.publish?.douyin?.private ?? true),
+        headed: (current?.publish?.douyin?.headed ?? true),
         ...((current?.publish || {}).douyin || {}),
         root: nextSauRoot
       }
@@ -683,7 +687,12 @@ function writeLocalRuntimeConfig(payload = {}) {
   return summarizeLocalRuntimeConfig(next);
 }
 
-function normalizePublishAccounts(payload = {}, legacyLocal = readLocalRuntimeConfig()) {
+function normalizePublishAccounts(
+  payload = {},
+  legacyLocal = readLocalRuntimeConfig(),
+  options = {}
+) {
+  const allowLegacySeed = options.allowLegacySeed !== false;
   const normalized = defaultPublishAccounts();
   ["xiaohongshu", "douyin"].forEach((platform) => {
     const seen = new Set();
@@ -710,7 +719,7 @@ function normalizePublishAccounts(payload = {}, legacyLocal = readLocalRuntimeCo
   });
 
   const legacyDouyinAccount = normalizeAccountName(legacyLocal?.publish?.douyin?.account || "");
-  if (legacyDouyinAccount && normalized.douyin.length === 0) {
+  if (allowLegacySeed && legacyDouyinAccount && normalized.douyin.length === 0) {
     normalized.douyin.push({
       id: `douyin:${legacyDouyinAccount}`,
       platform: "douyin",
@@ -789,7 +798,9 @@ function buildMigrationHints(localConfig, accounts) {
 
 function readPublishAccountsState() {
   const localConfig = readLocalRuntimeConfig();
-  const accounts = normalizePublishAccounts(readJsonSafe(publishAccountsPath) || {}, localConfig);
+  const storedAccounts = readJsonSafe(publishAccountsPath);
+  const allowLegacySeed = !fs.existsSync(publishAccountsPath) || !storedAccounts;
+  const accounts = normalizePublishAccounts(storedAccounts || {}, localConfig, { allowLegacySeed });
   const sauRoot = resolveSauRoot(localConfig);
   return {
     path: publishAccountsPath,
@@ -809,7 +820,7 @@ function readPublishAccountsState() {
 
 function writePublishAccountsState(payload) {
   const localConfig = readLocalRuntimeConfig();
-  const accounts = normalizePublishAccounts(payload, localConfig);
+  const accounts = normalizePublishAccounts(payload, localConfig, { allowLegacySeed: false });
   writeJsonSafe(publishAccountsPath, accounts);
   return {
     path: publishAccountsPath,
@@ -1377,16 +1388,46 @@ function normalizeTemplateGallery(gallery, selection, catalog, prompt, execution
     };
   });
 
-  const promptTemplateId = prompt?.template?.id;
-  const imagePathFromExecution = latestImageFromExecution(execution);
-  if (imagePathFromExecution && promptTemplateId) {
-    const matched = normalizedItems.find((item) => item.templateId === promptTemplateId);
-    if (matched && !matched.imagePath) {
+  normalizedItems.forEach((item) => {
+    const recoveredImagePath = resolveTemplateResultImagePath(item, execution);
+    if (!recoveredImagePath) return;
+    item.imagePath = recoveredImagePath;
+    item.generatedAt = item.generatedAt || readFileModifiedAt(recoveredImagePath);
+    item.status = "completed";
+    item.error = null;
+  });
+
+  const executionPrompt = resolveExecutionPromptPayload(execution, prompt);
+  const promptTemplateId = configuredString(executionPrompt?.template?.id);
+  const promptSlot = normalizeGallerySlot(executionPrompt?.slot);
+  const executionSubmitId = configuredString(execution?.results?.image?.submit_id);
+  const imagePathFromExecution = resolveExistingImagePath(
+    latestImageFromExecution(execution),
+    findDownloadedImageBySubmitId(executionSubmitId, execution)
+  );
+  if (imagePathFromExecution && (executionSubmitId || promptSlot || promptTemplateId)) {
+    const matched =
+      normalizedItems.find((item) => configuredString(item?.submitId) === executionSubmitId) ||
+      findTemplateGalleryItem(normalizedItems, {
+        slot: promptSlot,
+        templateId: promptTemplateId
+      });
+    if (matched && !hasTemplateResultImage(matched)) {
       matched.imagePath = imagePathFromExecution;
-      matched.generatedAt = execution?.results?.image?.finished_at || execution?.date || null;
-      matched.submitId = execution?.results?.image?.submit_id || null;
-      matched.promptPath = prompt?.artifacts?.prompt_txt || null;
+      matched.generatedAt =
+        matched.generatedAt ||
+        execution?.results?.image?.finished_at ||
+        readFileModifiedAt(imagePathFromExecution) ||
+        execution?.date ||
+        null;
+      matched.submitId = execution?.results?.image?.submit_id || matched.submitId || null;
+      matched.promptPath =
+        configuredString(executionPrompt?.artifacts?.prompt_txt) ||
+        configuredString(prompt?.artifacts?.prompt_txt) ||
+        matched.promptPath ||
+        null;
       matched.status = "completed";
+      matched.error = null;
     }
   }
 
@@ -1632,6 +1673,99 @@ function latestImageFromExecution(executionReport) {
   const xhsPlan = executionReport?.results?.xiaohongshu;
   if (xhsPlan?.latest_image) {
     return xhsPlan.latest_image;
+  }
+  return null;
+}
+
+function normalizeGallerySlot(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+}
+
+function resolveExistingImagePath(...candidatePaths) {
+  for (const candidate of candidatePaths) {
+    const targetPath = configuredString(candidate);
+    if (!targetPath) continue;
+    try {
+      if (fs.statSync(targetPath).isFile()) {
+        return targetPath;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function readFileModifiedAt(targetPath) {
+  const existingPath = resolveExistingImagePath(targetPath);
+  if (!existingPath) return null;
+  try {
+    return fs.statSync(existingPath).mtime.toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function hasTemplateResultImage(item) {
+  return Boolean(resolveExistingImagePath(item?.imagePath));
+}
+
+function resolveExecutionPromptPayload(executionReport, fallbackPrompt = null) {
+  const promptJsonPath = configuredString(executionReport?.prompt_result?.json_path);
+  return readJsonSafe(promptJsonPath) || fallbackPrompt || null;
+}
+
+function templateGallerySearchDirectories(localConfig = readLocalRuntimeConfig(), executionReport = null) {
+  const candidateDirs = [
+    configuredString(localConfig?.image?.downloads_dir),
+    configuredString(localConfig?.publish?.image_dir)
+  ];
+  const latestImagePath = resolveExistingImagePath(latestImageFromExecution(executionReport));
+  if (latestImagePath) {
+    candidateDirs.push(path.dirname(latestImagePath));
+  }
+  return Array.from(new Set(candidateDirs.filter((value) => isDirectoryPath(value))));
+}
+
+function findDownloadedImageBySubmitId(submitId, executionReport = null, localConfig = readLocalRuntimeConfig()) {
+  const token = configuredString(submitId);
+  if (!token) return null;
+  const expectedPrefix = `${token}_`;
+  for (const directoryPath of templateGallerySearchDirectories(localConfig, executionReport)) {
+    try {
+      const matched = fs
+        .readdirSync(directoryPath, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.startsWith(expectedPrefix))
+        .map((entry) => path.join(directoryPath, entry.name))
+        .map((candidatePath) => ({
+          candidatePath,
+          modifiedAt: readFileModifiedAt(candidatePath) || ""
+        }))
+        .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt));
+      if (matched.length) {
+        return matched[0].candidatePath;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function resolveTemplateResultImagePath(item, executionReport = null) {
+  return (
+    resolveExistingImagePath(item?.imagePath) ||
+    findDownloadedImageBySubmitId(item?.submitId, executionReport)
+  );
+}
+
+function findTemplateGalleryItem(items, { slot = null, templateId = "" } = {}) {
+  const normalizedSlot = normalizeGallerySlot(slot);
+  if (normalizedSlot) {
+    const bySlot = items.find((item) => Number(item?.slot) === normalizedSlot);
+    if (bySlot) return bySlot;
+  }
+  const normalizedTemplateId = configuredString(templateId);
+  if (normalizedTemplateId) {
+    const byTemplate = items.find((item) => item.templateId === normalizedTemplateId);
+    if (byTemplate) return byTemplate;
   }
   return null;
 }

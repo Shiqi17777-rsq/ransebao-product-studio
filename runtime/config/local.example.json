@@ -29,7 +29,8 @@
       "enabled": true,
       "root": "",
       "account": "creator",
-      "headed": true
+      "headed": true,
+      "private": true
     }
   }
 }

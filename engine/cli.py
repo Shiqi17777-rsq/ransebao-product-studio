@@ -118,7 +118,7 @@ def build_adapter_plans(
         )
         prompt_payload = prompt_result.get("payload") or load_json_file(prompt_result["json_path"])
         prompt_result = {key: value for key, value in prompt_result.items() if key != "payload"}
-        publish_images = load_publish_images(paths, product_id)
+        publish_images = load_publish_images(paths, product_id, local_config)
         plans = {
             "image": plan_generation(prompt_payload, local_config),
             "xiaohongshu": plan_xhs_publish(prompt_payload, local_config, publish_images),
@@ -280,20 +280,88 @@ def load_json_file(path: str) -> dict:
         return json.load(fh)
 
 
-def load_publish_images(paths: AppPaths, product_id: str) -> list[str]:
+def _existing_file(value: str | None) -> str | None:
+    candidate = str(value or "").strip()
+    if not candidate:
+        return None
+    target = Path(candidate)
+    return str(target) if target.is_file() else None
+
+
+def _gallery_search_directories(items: list[dict], local_config: dict[str, object]) -> list[Path]:
+    candidate_dirs: list[Path] = []
+    for raw_dir in (
+        local_config.get("image", {}).get("downloads_dir", "") if isinstance(local_config.get("image"), dict) else "",
+        local_config.get("publish", {}).get("image_dir", "") if isinstance(local_config.get("publish"), dict) else "",
+    ):
+        directory = str(raw_dir or "").strip()
+        if directory:
+            candidate_dirs.append(Path(directory))
+
+    for item in items:
+        existing_image = _existing_file(item.get("imagePath"))
+        if existing_image:
+            candidate_dirs.append(Path(existing_image).parent)
+
+    normalized_dirs: list[Path] = []
+    seen: set[str] = set()
+    for directory in candidate_dirs:
+        key = str(directory)
+        if key in seen or not directory.is_dir():
+            continue
+        seen.add(key)
+        normalized_dirs.append(directory)
+    return normalized_dirs
+
+
+def _find_downloaded_image_by_submit_id(submit_id: str | None, directories: list[Path]) -> str | None:
+    token = str(submit_id or "").strip()
+    if not token:
+        return None
+    expected_prefix = f"{token}_"
+    matches: list[Path] = []
+    for directory in directories:
+        try:
+            matches.extend(
+                candidate
+                for candidate in directory.iterdir()
+                if candidate.is_file() and candidate.name.startswith(expected_prefix)
+            )
+        except OSError:
+            continue
+    if not matches:
+        return None
+    matches.sort(key=lambda candidate: candidate.stat().st_mtime, reverse=True)
+    return str(matches[0])
+
+
+def load_publish_images(paths: AppPaths, product_id: str, local_config: dict[str, object]) -> list[str]:
     gallery_path = paths.runtime_product_state_dir(product_id) / "current_template_gallery.json"
     if not gallery_path.exists():
         return []
     payload = load_json_file(str(gallery_path))
     items = payload.get("items", []) if isinstance(payload, dict) else []
+    search_dirs = _gallery_search_directories(items, local_config)
+    changed = False
     normalized: list[str] = []
     for item in sorted(items, key=lambda entry: int(entry.get("slot", 999))):
-        if item.get("status") != "completed":
+        image_path = _existing_file(item.get("imagePath"))
+        if not image_path:
+            recovered_path = _find_downloaded_image_by_submit_id(item.get("submitId"), search_dirs)
+            if recovered_path:
+                image_path = recovered_path
+                item["imagePath"] = recovered_path
+                item["status"] = "completed"
+                item["error"] = None
+                changed = True
+        if item.get("status") != "completed" or not image_path:
             continue
-        image_path = str(item.get("imagePath") or "").strip()
         if not image_path or image_path in normalized:
             continue
         normalized.append(image_path)
+    if changed and isinstance(payload, dict):
+        payload["items"] = items
+        gallery_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return normalized[:3]
 
 

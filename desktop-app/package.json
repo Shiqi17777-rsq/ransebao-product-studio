@@ -11,7 +11,7 @@
     "build:mac": "node ../packaging/scripts/prepare_bundle_assets.mjs --target mac-arm64 && electron-builder --mac dmg --arm64",
     "build:mac-dir": "node ../packaging/scripts/prepare_bundle_assets.mjs --target mac-arm64 && electron-builder --mac dir --arm64",
     "build:win": "node ../packaging/scripts/prepare_bundle_assets.mjs --target win-x64 && electron-builder --win nsis --x64",
-    "build:win-portable": "node ../packaging/scripts/prepare_bundle_assets.mjs --target win-x64 && electron-builder --win portable --x64 -c.win.artifactName='Ransebao-Product-Studio-${version}-win-${arch}-portable.exe'",
+    "build:win-portable": "node ../packaging/scripts/prepare_bundle_assets.mjs --target win-x64 && electron-builder --win portable --x64 -c.win.artifactName=Ransebao-Product-Studio-${version}-win-${arch}-portable.${ext}",
     "verify:dist": "node ../packaging/scripts/verify_dist_bundle.mjs"
   },
   "devDependencies": {
@@ -28,6 +28,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "app/**/*",
       "src/**/*",
       "scripts/**/*",
       "launch_desktop_app.sh",

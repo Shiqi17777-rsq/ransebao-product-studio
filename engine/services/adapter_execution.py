@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import locale
 import os
+import shutil
 import subprocess
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from ..core.paths import AppPaths
 
@@ -25,6 +30,100 @@ def _load_json_text(text: str) -> dict[str, Any] | None:
         return json.loads(text)
     except Exception:
         return None
+
+
+def _decode_process_output(data: bytes | None) -> str:
+    if not data:
+        return ""
+
+    encodings = [
+        "utf-8",
+        "utf-8-sig",
+        locale.getpreferredencoding(False) or "",
+        "gbk",
+    ]
+    seen: set[str] = set()
+    for encoding in encodings:
+        normalized = (encoding or "").strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
+def _run_process(
+    argv: list[str],
+    *,
+    cwd: str,
+    env: dict[str, str] | None = None,
+) -> tuple[subprocess.CompletedProcess[bytes], str, str]:
+    completed = subprocess.run(
+        argv,
+        cwd=cwd,
+        env={**os.environ, **env} if env else None,
+        capture_output=True,
+        text=False,
+        check=False,
+    )
+    stdout_text = _decode_process_output(completed.stdout)
+    stderr_text = _decode_process_output(completed.stderr)
+    return completed, stdout_text, stderr_text
+
+
+def _download_file(url: str, destination: Path, *, attempts: int = 3, timeout: int = 120) -> None:
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+        },
+    )
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with urlopen(request, timeout=timeout) as response, destination.open("wb") as output:
+                shutil.copyfileobj(response, output)
+            if destination.is_file() and destination.stat().st_size > 0:
+                return
+            raise OSError(f"Downloaded empty file from {url}")
+        except Exception as exc:  # pragma: no cover - network dependent
+            last_error = exc
+            try:
+                destination.unlink(missing_ok=True)
+            except OSError:
+                pass
+            if attempt < attempts - 1:
+                time.sleep(1.5)
+    raise OSError(f"Failed to download result media from {url}: {last_error}")
+
+
+def _download_result_images(result_payload: dict[str, Any], submit_id: str, downloads_dir: str) -> list[str]:
+    images = result_payload.get("images", []) if isinstance(result_payload, dict) else []
+    normalized_paths: list[str] = []
+    target_dir = Path(downloads_dir)
+
+    for index, item in enumerate(images, start=1):
+        if not isinstance(item, dict):
+            continue
+        existing_path = str(item.get("path") or "").strip()
+        if existing_path and Path(existing_path).is_file():
+            normalized_paths.append(existing_path)
+            continue
+
+        image_url = str(item.get("image_url") or "").strip()
+        if not image_url:
+            continue
+        parsed = urlparse(image_url)
+        suffix = Path(parsed.path).suffix or ".png"
+        target_path = target_dir / f"{submit_id}_image_{index}{suffix}"
+        _download_file(image_url, target_path)
+        normalized_paths.append(str(target_path))
+
+    return normalized_paths
 
 
 def execute_plan(plan: dict[str, Any], *, execute: bool) -> dict[str, Any]:
@@ -77,14 +176,7 @@ def execute_plan(plan: dict[str, Any], *, execute: bool) -> dict[str, Any]:
 
     started_at = _now_iso()
     try:
-        completed = subprocess.run(
-            argv,
-            cwd=cwd,
-            env={**os.environ, **env} if env else None,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        completed, stdout_text, stderr_text = _run_process(argv, cwd=cwd, env=env)
     except FileNotFoundError as exc:
         finished_at = _now_iso()
         return {
@@ -118,8 +210,8 @@ def execute_plan(plan: dict[str, Any], *, execute: bool) -> dict[str, Any]:
         "started_at": started_at,
         "finished_at": finished_at,
         "returncode": completed.returncode,
-        "stdout_tail": _tail(completed.stdout),
-        "stderr_tail": _tail(completed.stderr),
+        "stdout_tail": _tail(stdout_text),
+        "stderr_tail": _tail(stderr_text),
     }
 
 
@@ -173,13 +265,7 @@ def execute_image_plan(plan: dict[str, Any], *, execute: bool) -> dict[str, Any]
 
     started_at = _now_iso()
     try:
-        submit = subprocess.run(
-            argv,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        submit, submit_stdout, submit_stderr = _run_process(argv, cwd=cwd)
     except FileNotFoundError as exc:
         finished_at = _now_iso()
         return {
@@ -205,7 +291,7 @@ def execute_image_plan(plan: dict[str, Any], *, execute: bool) -> dict[str, Any]
             "stderr_tail": str(exc),
         }
 
-    submit_payload = _load_json_text(submit.stdout)
+    submit_payload = _load_json_text(submit_stdout)
     submit_id = None
     if submit_payload:
         submit_id = submit_payload.get("data", {}).get("submit_id") or submit_payload.get("submit_id")
@@ -219,20 +305,20 @@ def execute_image_plan(plan: dict[str, Any], *, execute: bool) -> dict[str, Any]
             "started_at": started_at,
             "finished_at": finished_at,
             "returncode": submit.returncode,
-            "stdout_tail": _tail(submit.stdout, limit=4000),
-            "stderr_tail": _tail(submit.stderr, limit=4000),
+            "stdout_tail": _tail(submit_stdout, limit=4000),
+            "stderr_tail": _tail(submit_stderr, limit=4000),
         }
 
     poll_attempts = int(plan.get("poll_attempts", 8))
     poll_interval_seconds = int(plan.get("poll_interval_seconds", 15))
-    stdout_parts = [submit.stdout]
-    stderr_parts = [submit.stderr]
+    stdout_parts = [submit_stdout]
+    stderr_parts = [submit_stderr]
     download_paths: list[str] = []
     final_status = "submitted_waiting"
 
     for attempt in range(poll_attempts):
         if query_argv:
-            query_cmd = list(query_argv) + ["--submit_id", str(submit_id), "--download_dir", downloads_dir]
+            query_cmd = list(query_argv) + ["--submit_id", str(submit_id)]
         else:
             query_cmd = [
                 python_bin,
@@ -242,22 +328,22 @@ def execute_image_plan(plan: dict[str, Any], *, execute: bool) -> dict[str, Any]
                 "--download-dir",
                 downloads_dir,
             ]
-        query = subprocess.run(
-            query_cmd,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        stdout_parts.append(query.stdout)
-        stderr_parts.append(query.stderr)
-        payload = _load_json_text(query.stdout) or {}
-        data = payload.get("data", {})
+        query, query_stdout, query_stderr = _run_process(query_cmd, cwd=cwd)
+        stdout_parts.append(query_stdout)
+        stderr_parts.append(query_stderr)
+        payload = _load_json_text(query_stdout) or {}
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
         gen_status = data.get("gen_status")
         if gen_status == "success":
-            final_status = "succeeded"
-            images = data.get("result_json", {}).get("images", [])
-            download_paths = [str(item.get("path")) for item in images if item.get("path")]
+            try:
+                download_paths = _download_result_images(data.get("result_json", {}), str(submit_id), downloads_dir)
+            except Exception as exc:
+                final_status = "failed_download"
+                stderr_parts.append(str(exc))
+                break
+            final_status = "succeeded" if download_paths else "failed_download"
+            if final_status == "failed_download":
+                stderr_parts.append("Image task succeeded remotely but no image was downloaded.")
             break
         if gen_status == "fail":
             final_status = "failed_generation"
@@ -358,14 +444,7 @@ def execute_multi_account_plan(plan: dict[str, Any], *, execute: bool) -> dict[s
             account_results.append(account_result)
             continue
         try:
-            completed = subprocess.run(
-                argv,
-                cwd=cwd,
-                env={**os.environ, **env} if env else None,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            completed, stdout_text, stderr_text = _run_process(argv, cwd=cwd, env=env)
             account_status = "succeeded" if completed.returncode == 0 else "failed_returncode"
             if account_status == "succeeded":
                 success_count += 1
@@ -376,12 +455,12 @@ def execute_multi_account_plan(plan: dict[str, Any], *, execute: bool) -> dict[s
                 "started_at": account_started_at,
                 "finished_at": _now_iso(),
                 "returncode": completed.returncode,
-                "stdout_tail": _tail(completed.stdout),
-                "stderr_tail": _tail(completed.stderr),
+                "stdout_tail": _tail(stdout_text),
+                "stderr_tail": _tail(stderr_text),
             }
             account_results.append(account_result)
-            stdout_parts.append(f"[{account_name}]\n{completed.stdout}".strip())
-            stderr_parts.append(f"[{account_name}]\n{completed.stderr}".strip())
+            stdout_parts.append(f"[{account_name}]\n{stdout_text}".strip())
+            stderr_parts.append(f"[{account_name}]\n{stderr_text}".strip())
         except FileNotFoundError as exc:
             account_result = {
                 "accountName": account_name,

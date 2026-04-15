@@ -16,13 +16,25 @@ function parseCliStdout(stdout = "") {
   }
 }
 
+function buildCliEnv() {
+  return {
+    ...process.env,
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUTF8: "1",
+    PYTHONUNBUFFERED: "1"
+  };
+}
+
 function createCliRunner(deps) {
   function runCli(command, options = {}) {
     const args = buildCliArgs(deps.runtimeBaseDir, command, options);
     const pythonBin = deps.resolvePythonBin(deps.readLocalRuntimeConfig(), options.dependencyReport);
 
     return new Promise((resolve) => {
-      const child = deps.spawn(pythonBin, args, { cwd: deps.productStudioRoot });
+      const child = deps.spawn(pythonBin, args, {
+        cwd: deps.productStudioRoot,
+        env: buildCliEnv()
+      });
       let stdout = "";
       let stderr = "";
 
@@ -47,7 +59,10 @@ function createCliRunner(deps) {
   function spawnCliTask(command, options = {}, handlers = {}) {
     const args = buildCliArgs(deps.runtimeBaseDir, command, options);
     const pythonBin = deps.resolvePythonBin(deps.readLocalRuntimeConfig(), options.dependencyReport);
-    const child = deps.spawn(pythonBin, args, { cwd: deps.productStudioRoot });
+    const child = deps.spawn(pythonBin, args, {
+      cwd: deps.productStudioRoot,
+      env: buildCliEnv()
+    });
     let stdout = "";
     let stderr = "";
 

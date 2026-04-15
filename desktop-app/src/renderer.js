@@ -445,15 +445,37 @@ function setStatusItem(id, value, ready) {
 
 function stageSnapshot(dashboard) {
   const bestBrief = dashboard.bestBrief?.winner?.brief;
+  const briefCount = dashboard.briefs?.count || 0;
+  const upstreamReady = Boolean(
+    dashboard.upstream?.routeMode ||
+    dashboard.brandPool?.count ||
+    dashboard.hotPool?.date
+  );
   const execution = dashboard.execution || {};
   const promptReady = Boolean(execution?.prompt_result?.json_path);
   const latestImage = Boolean(dashboard.latestImage);
 
-  if (!bestBrief) {
+  if (!upstreamReady) {
     return {
       label: "资讯刷新中",
       value: 18,
       steps: ["current", "pending", "pending", "pending", "pending"]
+    };
+  }
+
+  if (!bestBrief && !briefCount) {
+    return {
+      label: "上游已刷新，正在生成 brief",
+      value: 34,
+      steps: ["complete", "current", "pending", "pending", "pending"]
+    };
+  }
+
+  if (!bestBrief) {
+    return {
+      label: "候选 brief 已生成",
+      value: 46,
+      steps: ["complete", "complete", "current", "pending", "pending"]
     };
   }
 
@@ -527,12 +549,29 @@ function getTemplateMeta(templateId) {
   };
 }
 
+function localPathToAssetUrl(targetPath) {
+  const raw = safeString(targetPath, "").trim();
+  if (!raw) return "";
+  if (/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(raw)) return raw;
+  const normalized = raw.replace(/\\/g, "/");
+  if (/^[A-Za-z]:\//.test(normalized)) {
+    return encodeURI(`file:///${normalized}`);
+  }
+  if (normalized.startsWith("//")) {
+    return encodeURI(`file:${normalized}`);
+  }
+  if (normalized.startsWith("/")) {
+    return encodeURI(`file://${normalized}`);
+  }
+  return encodeURI(normalized);
+}
+
 function renderTemplatePreview(meta) {
   const imagePath = meta?.previewImagePath;
   if (imagePath) {
     return `
       <span class="template-preview is-${meta.id} has-image">
-        <img src="${encodeURI(imagePath)}" alt="${meta.name}" class="template-preview-image" />
+        <img src="${localPathToAssetUrl(imagePath)}" alt="${meta.name}" class="template-preview-image" />
       </span>
     `;
   }
@@ -545,7 +584,7 @@ function openImagePreview(imagePath, title = "生成结果大图") {
   const backdrop = $("image-preview-backdrop");
   const image = $("image-preview-image");
   if (image) {
-    image.src = encodeURI(imagePath);
+    image.src = localPathToAssetUrl(imagePath);
     image.alt = title;
   }
   setText("image-preview-title", title);
@@ -673,7 +712,7 @@ function renderTemplateResults() {
         <div class="template-result-preview-frame">
           ${
             item.imagePath
-              ? `<img src="${encodeURI(item.imagePath)}" alt="${item.templateName}" class="template-result-image" data-image-preview="${encodeURIComponent(item.imagePath)}" data-image-title="${encodeURIComponent(item.templateName)}" />`
+              ? `<img src="${localPathToAssetUrl(item.imagePath)}" alt="${item.templateName}" class="template-result-image" data-image-preview="${encodeURIComponent(item.imagePath)}" data-image-title="${encodeURIComponent(item.templateName)}" />`
               : `<div class="template-result-placeholder">这张模板图生成后会显示在这里</div>`
           }
         </div>
@@ -1338,22 +1377,35 @@ function applyActiveBriefSnapshot(activeBriefPayload) {
 function applyDashboard(dashboard, environment = null) {
   state.dashboard = dashboard;
   state.environmentReport = environment || dashboard.environmentReport || state.environmentReport;
-  state.selectedBriefId = dashboard.activeBrief?.brief?.brief_id || dashboard.bestBrief?.winner?.brief?.brief_id || null;
+  state.selectedBriefId =
+    dashboard.activeBrief?.brief?.brief_id ||
+    dashboard.bestBrief?.winner?.brief?.brief_id ||
+    dashboard.briefs?.items?.[0]?.brief_id ||
+    null;
 
   const upstream = dashboard.upstream || {};
   const bestBriefRoot = dashboard.bestBrief || {};
+  const resolvedRouteMode = bestBriefRoot.route_mode || upstream.routeMode || null;
+  const rankedBriefs = Array.isArray(bestBriefRoot.ranked) && bestBriefRoot.ranked.length
+    ? bestBriefRoot.ranked
+    : (Array.isArray(dashboard.briefs?.items) ? dashboard.briefs.items : []);
+  const selectedOrWinnerBrief =
+    dashboard.activeBrief?.brief ||
+    dashboard.bestBrief?.winner?.brief ||
+    dashboard.briefs?.items?.[0] ||
+    null;
   const prompt = dashboard.prompt || {};
   const snapshot = stageSnapshot(dashboard);
 
   setText("product-name", safeString(dashboard.meta.productName));
   setText("dashboard-date", safeString(dashboard.meta.date));
-  setText("route-mode-badge", translateRouteMode(bestBriefRoot.route_mode));
+  setText("route-mode-badge", translateRouteMode(resolvedRouteMode));
 
   setText("metric-hot-count", String(upstream.hotCandidateCount || 0).padStart(2, "0"));
   setText("metric-brand-count", String(upstream.brandCandidateCount || 0).padStart(2, "0"));
-  setText("metric-route", translateRouteMode(bestBriefRoot.route_mode));
-  setText("metric-briefs", String(bestBriefRoot.ranked?.length || 0).padStart(2, "0"));
-  setText("publish-platform", safeString(bestBriefRoot?.winner?.brief?.platform));
+  setText("metric-route", translateRouteMode(resolvedRouteMode));
+  setText("metric-briefs", String(bestBriefRoot.ranked?.length || dashboard.briefs?.count || 0).padStart(2, "0"));
+  setText("publish-platform", safeString(selectedOrWinnerBrief?.platform));
   const publishImages = Array.isArray(dashboard.publishImages) ? dashboard.publishImages : [];
   const accountsSummary = dashboard.accounts?.summary || {
     xiaohongshu: { enabled: 0, total: 0 },
@@ -1404,7 +1456,7 @@ function applyDashboard(dashboard, environment = null) {
   }));
   renderSimpleList("hot-pool-list", hotItems, "今天暂时没有强相关热点。");
 
-  const brandItems = (bestBriefRoot.ranked || []).slice(0, 3).map((item) => ({
+  const brandItems = rankedBriefs.slice(0, 3).map((item) => ({
     label: "品牌候选",
     title: item.topic_name || "待生成",
     note: `${item.content_type || "主题"} · ${item.platform || "平台待定"}`
@@ -1415,7 +1467,7 @@ function applyDashboard(dashboard, environment = null) {
   const placeholder = $("image-placeholder");
   if (imageEl && placeholder) {
     if (dashboard.latestImage) {
-      imageEl.src = dashboard.latestImage;
+      imageEl.src = localPathToAssetUrl(dashboard.latestImage);
       imageEl.classList.add("visible");
       placeholder.style.display = "none";
     } else {

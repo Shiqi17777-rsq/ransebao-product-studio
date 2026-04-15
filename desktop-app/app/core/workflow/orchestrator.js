@@ -1,3 +1,5 @@
+const fs = require("fs");
+
 function buildUpstreamCommands() {
   return [
     { command: "refresh-news", label: "刷新热点资讯池" },
@@ -8,6 +10,87 @@ function buildUpstreamCommands() {
     { command: "build-image-prompt", label: "更新图片与发布资产" },
     { command: "plan-execution", label: "检查执行条件" }
   ];
+}
+
+function collectExecutionModes(result, scope = null) {
+  const parsed = result?.parsed || {};
+  if (!parsed || typeof parsed !== "object") return [];
+
+  const nestedResults = parsed?.results && typeof parsed.results === "object"
+    ? (
+      scope && scope !== "publish"
+        ? [parsed.results[scope]].filter(Boolean)
+        : Object.values(parsed.results).filter(Boolean)
+    )
+    : [];
+
+  return [parsed.mode, ...nestedResults.map((entry) => entry?.mode).filter(Boolean)].filter(Boolean);
+}
+
+function resolveImageExecution(result) {
+  const imageResult = result?.parsed?.results?.image || {};
+  const promptResult = result?.parsed?.prompt_result || {};
+  const downloadPaths = Array.isArray(imageResult?.download_paths)
+    ? imageResult.download_paths.filter(Boolean)
+    : [];
+  const downloadPath = downloadPaths.find((candidate) => {
+    try {
+      return fs.existsSync(candidate);
+    } catch {
+      return false;
+    }
+  }) || null;
+  const modes = collectExecutionModes(result, "image");
+  const error = !result?.ok
+    ? (imageResult?.stderr_tail || result?.stderr || "Image generation failed.")
+    : !modes.length
+      ? "Image task finished without execution status."
+      : modes.every((mode) => mode === "plan")
+        ? "Image task only produced a plan and did not execute."
+        : !downloadPath
+          ? "Image task completed without a downloaded image."
+          : "";
+
+  return {
+    ok: !error,
+    error,
+    imageResult,
+    promptResult,
+    downloadPath
+  };
+}
+
+function resolvePublishExecutionError(result, scope) {
+  const modes = collectExecutionModes(result, scope);
+  const scopedResults = result?.parsed?.results && typeof result.parsed.results === "object"
+    ? (
+      scope && scope !== "publish"
+        ? [result.parsed.results[scope]].filter(Boolean)
+        : Object.values(result.parsed.results).filter(Boolean)
+    )
+    : [];
+  const failedResult = scopedResults.find((entry) => {
+    const status = String(entry?.status || "").trim();
+    return status && status !== "succeeded";
+  });
+  const failedAccount = (failedResult?.account_results || []).find((entry) => {
+    const status = String(entry?.status || "").trim();
+    return status && status !== "succeeded";
+  });
+  const scopedError = scopedResults
+    .map((entry) => entry?.stderr_tail || entry?.error || "")
+    .find(Boolean);
+  const failedStatusLabel = failedResult
+    ? `${failedResult.platform || failedResult.adapter || "publish"} status=${failedResult.status}`
+    : "";
+
+  if (!result?.ok) return scopedError || result?.stderr || "Publish execution failed.";
+  if (!modes.length) return "Publish task finished without execution status.";
+  if (modes.every((mode) => mode === "plan")) return "Publish task only produced a plan and did not execute.";
+  if (failedResult) {
+    return failedAccount?.stderr_tail || scopedError || failedStatusLabel || "Publish task finished with a failed platform result.";
+  }
+  return "";
 }
 
 function createWorkflowOrchestrator(deps) {
@@ -119,28 +202,34 @@ function createWorkflowOrchestrator(deps) {
           stepLabel: `生成模板 ${slotEntry.slot}`
         });
 
-        const result = await deps.runCli("execute-adapters", {
+        const rawResult = await deps.runCli("execute-adapters", {
           ...normalized,
           scope: "image",
           slot: slotEntry.slot,
           templateId: slotEntry.templateId
         });
+        const resolvedImage = resolveImageExecution(rawResult);
+        const result = {
+          ...rawResult,
+          ok: resolvedImage.ok,
+          stderr: resolvedImage.ok ? rawResult.stderr : (resolvedImage.error || rawResult.stderr)
+        };
         imageSteps.push({ slot: slotEntry.slot, templateId: slotEntry.templateId, ...result });
+        const imageResult = resolvedImage.imageResult;
+        const promptResult = resolvedImage.promptResult;
+        const downloadPath = resolvedImage.downloadPath;
 
-        const imageResult = result?.parsed?.results?.image || {};
-        const promptResult = result?.parsed?.prompt_result || {};
-        const downloadPath = imageResult?.download_paths?.[0] || null;
         galleryState = {
           ...galleryState,
           items: galleryState.items.map((item) => {
             if (Number(item.slot) !== Number(slotEntry.slot)) return item;
             return {
               ...item,
-              status: result.ok ? "completed" : "error",
-              imagePath: downloadPath,
-              generatedAt: result.ok ? (imageResult?.finished_at || new Date().toISOString()) : item.generatedAt,
-              submitId: imageResult?.submit_id || null,
-              promptPath: promptResult?.prompt_path || null,
+              status: resolvedImage.ok ? "completed" : "error",
+              imagePath: resolvedImage.ok ? resolvedImage.downloadPath : null,
+              generatedAt: resolvedImage.ok ? (resolvedImage.imageResult?.finished_at || new Date().toISOString()) : null,
+              submitId: resolvedImage.ok ? (resolvedImage.imageResult?.submit_id || null) : null,
+              promptPath: resolvedImage.promptResult?.prompt_path || null,
               error: result.ok ? null : (imageResult?.stderr_tail || result.stderr || "生成失败")
             };
           })
@@ -194,10 +283,16 @@ function createWorkflowOrchestrator(deps) {
         };
       }
 
-      const publishResult = await deps.runCli("execute-adapters", {
+      const rawPublishResult = await deps.runCli("execute-adapters", {
         ...normalized,
         scope: "publish"
       });
+      const publishError = resolvePublishExecutionError(rawPublishResult, "publish");
+      const publishResult = {
+        ...rawPublishResult,
+        ok: rawPublishResult.ok && !publishError,
+        stderr: publishError || rawPublishResult.stderr
+      };
       if (!publishResult.ok) {
         throw {
           stage: "publish",
@@ -500,12 +595,16 @@ function createWorkflowOrchestrator(deps) {
         totalSteps: 1,
         stepLabel: "提交发布任务"
       });
+      const rawResult = await deps.runCli("execute-adapters", {
+        ...normalized,
+        scope: scopeByAction[action]
+      });
+      const publishError = resolvePublishExecutionError(rawResult, scopeByAction[action]);
       const result = {
         action,
-        ...(await deps.runCli("execute-adapters", {
-          ...normalized,
-          scope: scopeByAction[action]
-        }))
+        ...rawResult,
+        ok: rawResult.ok && !publishError,
+        stderr: publishError || rawResult.stderr
       };
       deps.emitWorkflowProgress({
         action,
@@ -689,16 +788,22 @@ function createWorkflowOrchestrator(deps) {
               stepLabel: `模板 ${slotEntry.slot} 开始生成`
             });
 
-            const result = await deps.runCli("execute-adapters", {
+            const rawResult = await deps.runCli("execute-adapters", {
               ...normalized,
               scope: "image",
               slot: slotEntry.slot,
               templateId: slotEntry.templateId
             });
+            const resolvedImage = resolveImageExecution(rawResult);
+            const result = {
+              ...rawResult,
+              ok: resolvedImage.ok,
+              stderr: resolvedImage.ok ? rawResult.stderr : (resolvedImage.error || rawResult.stderr)
+            };
             taskResults.push({ slot: slotEntry.slot, templateId: slotEntry.templateId, ...result });
-            const imageResult = result?.parsed?.results?.image || {};
-            const promptResult = result?.parsed?.prompt_result || {};
-            const downloadPath = imageResult?.download_paths?.[0] || null;
+            const imageResult = resolvedImage.imageResult;
+            const promptResult = resolvedImage.promptResult;
+            const downloadPath = resolvedImage.downloadPath;
 
             galleryState = {
               ...galleryState,

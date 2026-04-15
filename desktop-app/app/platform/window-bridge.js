@@ -47,7 +47,8 @@ function createWindowBridge({
       webPreferences: {
         preload: path.join(desktopAppRoot, "preload.js"),
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        sandbox: false
       }
     });
 

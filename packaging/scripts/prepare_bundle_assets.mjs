@@ -19,6 +19,7 @@ const sauSourceStage = path.join(sauBundleStage, "source", "social-auto-upload")
 const sauDistStage = path.join(sauBundleStage, "dist");
 const sauWheelhouseStage = path.join(sauBundleStage, "wheelhouse");
 const sauBuildVenvStage = path.join(tempStage, "sau-build-venv");
+const sauBuildSourceStage = path.join(tempStage, "sau-build-source", "social-auto-upload");
 const manifestPath = path.join(stagingRoot, "bundle-manifest.json");
 
 const rawArgs = process.argv.slice(2);
@@ -388,10 +389,52 @@ function buildSauFilter(sourceRoot) {
   };
 }
 
+function ensureSauConfigModule(sourceRoot) {
+  const confModulePath = path.join(sourceRoot, "conf.py");
+  const confExamplePath = path.join(sourceRoot, "conf.example.py");
+  if (fs.existsSync(confModulePath) || !fs.existsSync(confExamplePath)) {
+    return false;
+  }
+  if (!dryRun) {
+    fs.copyFileSync(confExamplePath, confModulePath);
+  }
+  log(`synthesized conf.py from conf.example.py in ${sourceRoot}`);
+  return true;
+}
+
+function stageSauSource(sourceRoot, destinationRoot) {
+  resetDir(destinationRoot);
+  copyTree(sourceRoot, destinationRoot, buildSauFilter(sourceRoot));
+  ensureSauConfigModule(destinationRoot);
+  return destinationRoot;
+}
+
 function latestWheel(distRoot) {
   if (!fs.existsSync(distRoot)) return "";
   const wheelNames = fs.readdirSync(distRoot).filter((name) => name.endsWith(".whl")).sort();
   return wheelNames.length ? path.join(distRoot, wheelNames[wheelNames.length - 1]) : "";
+}
+
+function assertWheelContains(pythonBin, wheelPath, requiredEntries = []) {
+  if (!requiredEntries.length || dryRun) return;
+  const script = `
+import pathlib
+import sys
+import zipfile
+
+wheel = pathlib.Path(sys.argv[1])
+required = sys.argv[2:]
+
+with zipfile.ZipFile(wheel) as archive:
+    names = set(archive.namelist())
+
+missing = [name for name in required if name not in names]
+if missing:
+    raise SystemExit("Missing wheel entries: " + ", ".join(missing))
+`;
+  run(pythonBin, ["-c", script, wheelPath, ...requiredEntries], {
+    cwd: productStudioRoot
+  });
 }
 
 function preparePythonRuntime(pythonBin) {
@@ -434,8 +477,9 @@ function preparePythonRuntime(pythonBin) {
 
 function prepareSauBundle(pythonBin) {
   const sauRoot = process.env.PRODUCT_STUDIO_SAU_SOURCE || path.join(playgroundRoot, "social-auto-upload");
+  const sauBuildSourceRoot = stageSauSource(sauRoot, sauBuildSourceStage);
   if (includeSauSource) {
-    copyTree(sauRoot, sauSourceStage, buildSauFilter(sauRoot));
+    stageSauSource(sauRoot, sauSourceStage);
   }
   ensureDir(sauDistStage);
   ensureDir(sauWheelhouseStage);
@@ -450,7 +494,7 @@ function prepareSauBundle(pythonBin) {
     run(sauBuildPython, ["-m", "pip", "install", "--upgrade", "pip", "build"], {
       cwd: productStudioRoot
     });
-    run(sauBuildPython, ["-m", "build", "--wheel", "--outdir", sauDistStage, sauRoot], {
+    run(sauBuildPython, ["-m", "build", "--wheel", "--outdir", sauDistStage, sauBuildSourceRoot], {
       cwd: productStudioRoot
     });
 
@@ -458,6 +502,7 @@ function prepareSauBundle(pythonBin) {
     if (!wheelPath) {
       throw new Error("Failed to build social-auto-upload wheel.");
     }
+    assertWheelContains(sauBuildPython, wheelPath, ["conf.py", "sau_cli.py"]);
 
     const downloadArgs = ["-m", "pip", "download", "--dest", sauWheelhouseStage];
     if (isWindowsBundleTarget) {
