@@ -3,16 +3,36 @@
   "workspace_root": "./runtime",
   "api_keys": {
     "dreamina": "",
-    "openai": ""
+    "openai": "",
+    "gemini": "",
+    "nano_banana_pro": ""
   },
   "runtime": {
     "python_bin": ""
   },
   "image": {
+    "provider": "dreamina",
+    "nano_banana_model": "gemini-3-pro-image-preview",
+    "nano_banana_api_base": "",
+    "nano_banana_auth_mode": "auto",
     "dreamina_cli_root": "",
     "device_image_dir": "",
     "downloads_dir": "",
     "poll_attempts": 8,
+    "poll_interval_seconds": 15
+  },
+  "video": {
+    "template_id": "beauty-hair-transformation",
+    "dreamina_cli_root": "",
+    "reference_image_dir": "",
+    "hair_color_reference_dir": "",
+    "selected_hair_color_image": "",
+    "downloads_dir": "",
+    "model_version": "seedance2.0_vip",
+    "duration": 15,
+    "ratio": "16:9",
+    "video_resolution": "720p",
+    "poll_attempts": 12,
     "poll_interval_seconds": 15
   },
   "publish": {
@@ -28,7 +48,7 @@
     "douyin": {
       "enabled": true,
       "root": "",
-      "account": "creator",
+      "account": "",
       "headed": true,
       "private": true
     }

@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, net } = require("electron");
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { Readable, Transform } = require("stream");
@@ -104,7 +104,9 @@ const {
 
 const {
   setScheduledAutomationRunner,
+  setScheduledVideoAutomationRunner,
   syncDesktopAutomationSchedule,
+  syncVideoAutomationSchedule,
   registerAppLifecycle
 } = createLifecycleBridge({
   app,
@@ -112,6 +114,9 @@ const {
   normalizeDesktopAutomationSettings,
   readDesktopAutomationSettings,
   writeDesktopAutomationSettings,
+  normalizeVideoAutomationSettings,
+  readVideoAutomationSettings,
+  writeVideoAutomationSettings,
   computeNextRunAt,
   formatDate,
   defaultProduct: "ransebao"
@@ -417,6 +422,32 @@ function pathExists(targetPath = "") {
   }
 }
 
+function commandExists(command, args = ["--version"]) {
+  const value = configuredString(command);
+  if (!value) return false;
+  try {
+    const result = spawnSync(value, args, {
+      cwd: productStudioRoot,
+      stdio: "ignore",
+      windowsHide: true,
+      env: process.env
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+function isPathLikeCommand(value = "") {
+  return path.isAbsolute(value) || value.includes("/") || value.includes("\\");
+}
+
+function isUsablePythonBin(candidate = "") {
+  const value = configuredString(candidate);
+  if (!value) return false;
+  return isPathLikeCommand(value) ? pathExists(value) : commandExists(value);
+}
+
 function expandProfileCandidate(candidate) {
   const value = String(candidate || "").trim();
   if (!value) return "";
@@ -626,17 +657,25 @@ function isDirectoryPath(targetPath = "") {
 }
 
 function resolvePythonBin(localConfig = readLocalRuntimeConfig(), dependencyReport = null) {
-  const managedBundled = managedBundledPythonBinPath();
-  if (managedBundled) return managedBundled;
-  const bundled = bundledPythonBinPath();
-  if (bundled) return bundled;
   const configured = configuredString(localConfig?.runtime?.python_bin || process.env.PRODUCT_STUDIO_PYTHON_BIN);
-  if (configured) return configured;
   const detected =
     configuredString(dependencyReport?.recommendedConfig?.pythonBin) ||
     configuredString(readJsonSafe(currentArtifacts().dependencyReport)?.recommendedConfig?.pythonBin);
-  if (detected) return detected;
-  return process.platform === "win32" ? "python" : "python3";
+  const fallbacks = process.platform === "win32"
+    ? ["py", "python", "python3"]
+    : ["python3", "python"];
+  return [
+    managedBundledPythonBinPath(),
+    bundledPythonBinPath(),
+    configured,
+    detected,
+    ...fallbacks
+  ].find(isUsablePythonBin) || fallbacks[0];
+}
+
+function defaultVideoDownloadsDir() {
+  const homeRoot = process.env.USERPROFILE || process.env.HOME || "";
+  return homeRoot ? path.join(homeRoot, "Desktop", "输出视频") : "";
 }
 
 function writeLocalRuntimeConfig(payload = {}) {
@@ -649,7 +688,9 @@ function writeLocalRuntimeConfig(payload = {}) {
     selected_product: configuredString(payload.selectedProduct || current?.selected_product || "ransebao"),
     workspace_root: configuredString(payload.workspaceRoot || current?.workspace_root || "./runtime"),
     api_keys: {
-      ...(current?.api_keys || {})
+      ...(current?.api_keys || {}),
+      gemini: configuredString(payload.geminiApiKey ?? current?.api_keys?.gemini),
+      nano_banana_pro: configuredString(payload.nanoBananaApiKey ?? current?.api_keys?.nano_banana_pro)
     },
     runtime: {
       ...(current?.runtime || {}),
@@ -657,11 +698,56 @@ function writeLocalRuntimeConfig(payload = {}) {
     },
     image: {
       ...(current?.image || {}),
+      provider: configuredString(payload.imageProvider ?? current?.image?.provider ?? "dreamina"),
+      nano_banana_model: configuredString(
+        payload.nanoBananaModel ?? current?.image?.nano_banana_model ?? "gemini-3-pro-image-preview"
+      ),
+      nano_banana_api_base: configuredString(
+        payload.nanoBananaApiBase ?? current?.image?.nano_banana_api_base ?? ""
+      ),
+      nano_banana_auth_mode: configuredString(
+        payload.nanoBananaAuthMode ?? current?.image?.nano_banana_auth_mode ?? "auto"
+      ),
       dreamina_cli_root: configuredString(payload.dreaminaCliRoot ?? current?.image?.dreamina_cli_root),
       device_image_dir: configuredString(payload.deviceImageDir ?? current?.image?.device_image_dir),
       downloads_dir: configuredString(payload.downloadsDir ?? current?.image?.downloads_dir),
       poll_attempts: Number(payload.pollAttempts ?? current?.image?.poll_attempts ?? 8),
       poll_interval_seconds: Number(payload.pollIntervalSeconds ?? current?.image?.poll_interval_seconds ?? 15)
+    },
+    video: {
+      ...(current?.video || {}),
+      template_id: configuredString(payload.videoTemplateId ?? current?.video?.template_id ?? "beauty-hair-transformation"),
+      dreamina_cli_root: configuredString(
+        payload.videoDreaminaCliRoot ??
+        payload.dreaminaCliRoot ??
+        current?.video?.dreamina_cli_root ??
+        current?.image?.dreamina_cli_root
+      ),
+      reference_image_dir: configuredString(
+        payload.videoReferenceImageDir ??
+        payload.deviceImageDir ??
+        current?.video?.reference_image_dir ??
+        current?.image?.device_image_dir
+      ),
+      hair_color_reference_dir: configuredString(
+        payload.videoHairColorReferenceDir ??
+        current?.video?.hair_color_reference_dir
+      ),
+      selected_hair_color_image: configuredString(
+        payload.videoSelectedHairColorImage ??
+        current?.video?.selected_hair_color_image
+      ),
+      downloads_dir: configuredString(
+        payload.videoDownloadsDir ??
+        current?.video?.downloads_dir ??
+        defaultVideoDownloadsDir()
+      ),
+      model_version: configuredString(payload.videoModelVersion ?? current?.video?.model_version ?? "seedance2.0_vip"),
+      duration: Number(payload.videoDuration ?? current?.video?.duration ?? 15),
+      ratio: configuredString(payload.videoRatio ?? current?.video?.ratio ?? "16:9"),
+      video_resolution: configuredString(payload.videoResolution ?? current?.video?.video_resolution ?? "720p"),
+      poll_attempts: Number(payload.videoPollAttempts ?? current?.video?.poll_attempts ?? 12),
+      poll_interval_seconds: Number(payload.videoPollIntervalSeconds ?? current?.video?.poll_interval_seconds ?? 15)
     },
     publish: {
       ...(current?.publish || {}),
@@ -1465,7 +1551,11 @@ function currentArtifacts(date = formatDate()) {
     briefDraft: path.join(runtimeRoot, "state", "current_brief_draft.json"),
     templateSelection: path.join(runtimeRoot, "state", "current_template_selection.json"),
     templateGallery: path.join(runtimeRoot, "state", "current_template_gallery.json"),
+    videoGenerationState: path.join(runtimeRoot, "state", "current_video_generation_state.json"),
+    videoGallery: path.join(runtimeRoot, "state", "current_video_gallery.json"),
+    videoPublishState: path.join(runtimeRoot, "state", "current_video_publish_state.json"),
     desktopAutomation: path.join(runtimeRoot, "state", "current_desktop_automation.json"),
+    videoAutomation: path.join(runtimeRoot, "state", "current_video_automation.json"),
     environmentReport: path.join(runtimeRoot, "state", "current_environment_report.json"),
     dependencyReport: path.join(runtimeRoot, "state", "current_dependency_report.json"),
     dependencyInstallState: path.join(runtimeRoot, "state", "current_dependency_install_state.json"),
@@ -1773,6 +1863,20 @@ function findTemplateGalleryItem(items, { slot = null, templateId = "" } = {}) {
   return null;
 }
 
+const AUTOMATION_TEXT_REPLACEMENTS = new Map([
+  ["灏氭湭鎵ц", "尚未执行"],
+  ["鐏忔碍婀幍褑顢?", "尚未执行"],
+  ["鐏忔碍婀幍褑顢", "尚未执行"],
+  ["鑷姩娴佺▼澶辫触", "自动流程失败"],
+  ["鑷姩娴佺▼澶辫触锛歱ublish", "自动流程失败：publish"]
+]);
+
+function sanitizeAutomationText(value, fallback = "尚未执行") {
+  const text = configuredString(value);
+  if (!text) return fallback;
+  return AUTOMATION_TEXT_REPLACEMENTS.get(text) || text;
+}
+
 function collectPublishImages(templateGallery) {
   const items = Array.isArray(templateGallery?.items) ? templateGallery.items : [];
   const normalized = [];
@@ -1799,15 +1903,21 @@ function normalizeDesktopAutomationSettings(payload = {}) {
     nextRunAt,
     lastRunAt: payload?.lastRunAt || null,
     lastRunStatus: payload?.lastRunStatus || "idle",
-    lastResultSummary: payload?.lastResultSummary || "尚未执行",
-    lastError: payload?.lastError || null,
+    lastResultSummary: sanitizeAutomationText(payload?.lastResultSummary, "尚未执行"),
+    lastError: sanitizeAutomationText(payload?.lastError, "") || null,
     lastTrigger: payload?.lastTrigger || null,
     updatedAt: payload?.updatedAt || null
   };
 }
 
 function readDesktopAutomationSettings() {
-  return normalizeDesktopAutomationSettings(readJsonSafe(currentArtifacts().desktopAutomation) || {});
+  const targetPath = currentArtifacts().desktopAutomation;
+  const payload = readJsonSafe(targetPath) || {};
+  const normalized = normalizeDesktopAutomationSettings(payload);
+  if (JSON.stringify(payload) !== JSON.stringify(normalized)) {
+    writeJsonSafe(targetPath, normalized);
+  }
+  return normalized;
 }
 
 function writeDesktopAutomationSettings(payload = {}) {
@@ -1817,6 +1927,44 @@ function writeDesktopAutomationSettings(payload = {}) {
     updatedAt: new Date().toISOString()
   });
   writeJsonSafe(currentArtifacts().desktopAutomation, next);
+  return next;
+}
+
+function normalizeVideoAutomationSettings(payload = {}) {
+  const enabled = Boolean(payload?.enabled);
+  const dailyTime = normalizeDailyTime(payload?.dailyTime || "09:30");
+  const nextRunAt = enabled ? (payload?.nextRunAt || computeNextRunAt(dailyTime)) : null;
+  return {
+    enabled,
+    dailyTime,
+    workflowMode: "generate-then-publish-current-video",
+    nextRunAt,
+    lastRunAt: payload?.lastRunAt || null,
+    lastRunStatus: payload?.lastRunStatus || "idle",
+    lastResultSummary: sanitizeAutomationText(payload?.lastResultSummary, "尚未执行"),
+    lastError: sanitizeAutomationText(payload?.lastError, "") || null,
+    lastTrigger: payload?.lastTrigger || null,
+    updatedAt: payload?.updatedAt || null
+  };
+}
+
+function readVideoAutomationSettings() {
+  const targetPath = currentArtifacts().videoAutomation;
+  const payload = readJsonSafe(targetPath) || {};
+  const normalized = normalizeVideoAutomationSettings(payload);
+  if (JSON.stringify(payload) !== JSON.stringify(normalized)) {
+    writeJsonSafe(targetPath, normalized);
+  }
+  return normalized;
+}
+
+function writeVideoAutomationSettings(payload = {}) {
+  const next = normalizeVideoAutomationSettings({
+    ...readVideoAutomationSettings(),
+    ...payload,
+    updatedAt: new Date().toISOString()
+  });
+  writeJsonSafe(currentArtifacts().videoAutomation, next);
   return next;
 }
 
@@ -1880,6 +2028,7 @@ const loadDashboard = createDashboardLoader({
   readResolvedActiveBrief,
   collectPublishImages,
   readDesktopAutomationSettings,
+  readVideoAutomationSettings,
   readPublishAccountsState,
   deriveOnboardingState,
   readDependencyInstallState
@@ -1896,6 +2045,7 @@ const { runCli, spawnCliTask } = createCliRunner({
 const {
   rebuildDownstreamAssetsForBrief,
   runDesktopAutomationSequence,
+  runVideoAutomationSequence,
   runWorkflowAction
 } = createWorkflowOrchestrator({
   runCli,
@@ -1910,21 +2060,28 @@ const {
   readDesktopAutomationSettings,
   writeDesktopAutomationSettings,
   syncDesktopAutomationSchedule,
+  readVideoAutomationSettings,
+  writeVideoAutomationSettings,
+  syncVideoAutomationSchedule,
   loadTemplateCatalog,
   normalizeTemplateSelection,
   normalizeTemplateGallery,
   currentArtifacts,
   readJsonSafe,
+  writeJsonSafe,
   collectPublishImages,
   formatDate,
   formatElapsed,
   getActiveAutomationRun: runtimeState.getActiveAutomationRun,
   setActiveAutomationRun: runtimeState.setActiveAutomationRun,
   getActiveImageTask: runtimeState.getActiveImageTask,
-  setActiveImageTask: runtimeState.setActiveImageTask
+  setActiveImageTask: runtimeState.setActiveImageTask,
+  getActiveVideoTask: runtimeState.getActiveVideoTask,
+  setActiveVideoTask: runtimeState.setActiveVideoTask
 });
 
 setScheduledAutomationRunner(runDesktopAutomationSequence);
+setScheduledVideoAutomationRunner(runVideoAutomationSequence);
 
 app.whenReady().then(() => {
   registerCoreIpcHandlers({
@@ -1966,6 +2123,8 @@ app.whenReady().then(() => {
     persistTemplateSelection,
     syncDesktopAutomationSchedule,
     readDesktopAutomationSettings,
+    syncVideoAutomationSchedule,
+    readVideoAutomationSettings,
     normalizeDailyTime,
     normalizeAccountName,
     patchAccounts,

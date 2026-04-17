@@ -37,6 +37,73 @@ function Get-RansebaoConfigRoot {
     return (Join-Path (Get-RansebaoRuntimeBase -AppDataName $AppDataName) "config")
 }
 
+function Get-RansebaoExecutableCandidatesFromDirectory {
+    param(
+        [string]$Directory
+    )
+
+    $results = New-Object System.Collections.Generic.List[string]
+    if (-not $Directory) {
+        return $results
+    }
+    if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
+        return $results
+    }
+
+    $patterns = @(
+        "Ransebao Product Studio.exe",
+        "Ransebao-Product-Studio-*-portable.exe",
+        "Ransebao-Product-Studio-*.exe"
+    )
+
+    foreach ($pattern in $patterns) {
+        $matches = Get-ChildItem -LiteralPath $Directory -Filter $pattern -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
+        foreach ($match in $matches) {
+            $results.Add($match.FullName)
+        }
+    }
+
+    return $results
+}
+
+function Get-RansebaoRegistryExecutableCandidates {
+    $results = New-Object System.Collections.Generic.List[string]
+    $registryRoots = @(
+        "Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "Registry::HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "Registry::HKEY_LOCAL_MACHINE\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+
+    foreach ($root in $registryRoots) {
+        $entries = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue | Where-Object {
+            $displayNameProperty = $_.PSObject.Properties["DisplayName"]
+            $displayName = if ($displayNameProperty) { [string]$displayNameProperty.Value } else { "" }
+            $displayName -like "Ransebao Product Studio*" -or $displayName -like "Ransebao*"
+        }
+        foreach ($entry in $entries) {
+            $displayIconProperty = $entry.PSObject.Properties["DisplayIcon"]
+            $displayIcon = if ($displayIconProperty) { [string]$displayIconProperty.Value } else { "" }
+            if ($displayIcon) {
+                $normalizedIcon = $displayIcon.Trim().Trim('"') -replace ",\d+$", ""
+                if (Test-Path -LiteralPath $normalizedIcon -PathType Leaf) {
+                    $results.Add($normalizedIcon)
+                }
+            }
+
+            $installLocationProperty = $entry.PSObject.Properties["InstallLocation"]
+            $installLocation = if ($installLocationProperty) { [string]$installLocationProperty.Value } else { "" }
+            if ($installLocation) {
+                foreach ($candidate in (Get-RansebaoExecutableCandidatesFromDirectory -Directory $installLocation)) {
+                    $results.Add($candidate)
+                }
+            }
+        }
+    }
+
+    return $results
+}
+
 function Resolve-RansebaoAppPath {
     param(
         [string]$AppPath = ""
@@ -45,22 +112,51 @@ function Resolve-RansebaoAppPath {
     $candidates = New-Object System.Collections.Generic.List[string]
 
     if ($AppPath) {
-        $candidates.Add($AppPath)
+        if (Test-Path -LiteralPath $AppPath -PathType Container) {
+            foreach ($candidate in (Get-RansebaoExecutableCandidatesFromDirectory -Directory $AppPath)) {
+                $candidates.Add($candidate)
+            }
+        } else {
+            $candidates.Add($AppPath)
+        }
     }
 
     if ($PSScriptRoot) {
         $candidates.Add((Join-Path $PSScriptRoot "Ransebao Product Studio.exe"))
         $candidates.Add((Join-Path (Split-Path $PSScriptRoot -Parent) "Ransebao Product Studio.exe"))
+        foreach ($candidate in (Get-RansebaoExecutableCandidatesFromDirectory -Directory $PSScriptRoot)) {
+            $candidates.Add($candidate)
+        }
+        foreach ($candidate in (Get-RansebaoExecutableCandidatesFromDirectory -Directory (Split-Path $PSScriptRoot -Parent))) {
+            $candidates.Add($candidate)
+        }
     }
 
     if ($env:LOCALAPPDATA) {
         $candidates.Add((Join-Path $env:LOCALAPPDATA "Programs\Ransebao Product Studio\Ransebao Product Studio.exe"))
+    }
+    if ($env:ProgramFiles) {
+        $candidates.Add((Join-Path $env:ProgramFiles "Ransebao Product Studio\Ransebao Product Studio.exe"))
+    }
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    if ($programFilesX86) {
+        $candidates.Add((Join-Path $programFilesX86 "Ransebao Product Studio\Ransebao Product Studio.exe"))
     }
 
     $desktopPath = [Environment]::GetFolderPath("Desktop")
     if ($desktopPath) {
         $candidates.Add((Join-Path $desktopPath "Ransebao Product Studio.exe"))
         $candidates.Add((Join-Path $desktopPath "Ransebao Product Studio\Ransebao Product Studio.exe"))
+        foreach ($candidate in (Get-RansebaoExecutableCandidatesFromDirectory -Directory $desktopPath)) {
+            $candidates.Add($candidate)
+        }
+        foreach ($candidate in (Get-RansebaoExecutableCandidatesFromDirectory -Directory (Join-Path $desktopPath "Ransebao Product Studio"))) {
+            $candidates.Add($candidate)
+        }
+    }
+
+    foreach ($candidate in (Get-RansebaoRegistryExecutableCandidates)) {
+        $candidates.Add($candidate)
     }
 
     foreach ($candidate in $candidates) {

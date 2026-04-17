@@ -5,6 +5,7 @@
     "candidates": [
       "/opt/homebrew/bin/python3",
       "/usr/local/bin/python3",
+      "py",
       "python3",
       "python"
     ]
@@ -42,6 +43,8 @@
     "label": "生成图片目录",
     "kind": "directory",
     "candidates": [
+      "~/Desktop/输出图片",
+      "~/Downloads/输出图片",
       "~/Desktop/jimeng-downloads",
       "~/Downloads/jimeng-downloads"
     ]

@@ -1692,6 +1692,135 @@ input {
   line-height: 1.56;
 }
 
+.compact-head {
+  align-items: end;
+}
+
+.video-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.video-template-card {
+  appearance: none;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(circle at 50% 118%, rgba(255, 255, 255, 0.18), transparent 42%),
+    linear-gradient(180deg, rgba(233, 238, 244, 0.2), rgba(219, 226, 235, 0.12));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    0 4px 10px rgba(122, 134, 149, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.video-template-card:hover {
+  border-color: rgba(255, 255, 255, 0.26);
+  transform: translateY(-1px);
+}
+
+.video-template-card:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 10px 22px rgba(122, 134, 149, 0.08);
+}
+
+.video-template-card.is-selected {
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow:
+    0 8px 18px rgba(122, 134, 149, 0.07),
+    0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.video-template-preview {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.14), transparent 24%),
+    linear-gradient(180deg, rgba(16, 20, 28, 0.84), rgba(30, 36, 46, 0.92));
+}
+
+.video-template-preview video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.video-template-preview-fallback {
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 25% 24%, rgba(255, 255, 255, 0.18), transparent 20%),
+    linear-gradient(160deg, rgba(28, 34, 42, 0.92), rgba(54, 63, 76, 0.8));
+}
+
+.video-template-preview-copy {
+  position: absolute;
+  inset: auto 12px 12px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(11, 14, 20, 0.18), rgba(11, 14, 20, 0.52));
+  color: rgba(250, 252, 255, 0.92);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+.video-template-preview-copy strong {
+  margin: 0;
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.video-template-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.video-template-meta strong {
+  display: block;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.34;
+  letter-spacing: -0.016em;
+  font-weight: 625;
+}
+
+.video-template-meta p,
+.video-template-meta small {
+  margin: 0;
+  color: var(--copy-muted);
+  font-size: 12.5px;
+  line-height: 1.56;
+}
+
+.video-template-meta small + small {
+  margin-top: 2px;
+}
+
 .template-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(120px, 144px));
@@ -1936,6 +2065,13 @@ input {
   margin-top: 14px;
 }
 
+.settings-helper {
+  margin: 10px 0 0;
+  color: var(--copy-muted);
+  font-size: 13.5px;
+  line-height: 1.58;
+}
+
 .automation-controls {
   display: grid;
   gap: 12px;
@@ -1970,7 +2106,9 @@ input {
   width: 100%;
 }
 
-.path-input-row input[type="text"] {
+.path-input-row input[type="text"],
+.path-input-row input[type="password"],
+.path-input-row select {
   min-width: 0;
   min-height: 46px;
   padding: 0 14px;
@@ -1987,7 +2125,7 @@ input {
   letter-spacing: -0.015em;
 }
 
-.path-input-row input[type="text"]::placeholder {
+.path-input-row input::placeholder {
   color: rgba(104, 114, 127, 0.76);
 }
 
@@ -2061,6 +2199,9 @@ input {
   box-shadow:
     0 4px 12px rgba(122, 134, 149, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  transition:
+    width var(--motion-fast) ease,
+    aspect-ratio var(--motion-fast) ease;
 }
 
 .template-result-image {
@@ -2069,6 +2210,14 @@ input {
   object-fit: cover;
   display: block;
   cursor: zoom-in;
+}
+
+.template-result-preview-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: rgba(14, 18, 24, 0.86);
 }
 
 .template-result-placeholder {
@@ -2154,6 +2303,32 @@ input {
   letter-spacing: -0.016em;
   font-weight: 620;
   font-feature-settings: "ss01" 1, "cv05" 1;
+}
+
+.settings-row input[type="text"],
+.settings-row input[type="password"],
+.settings-row input[type="number"],
+.settings-row select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: -0.015em;
+}
+
+.settings-row input::placeholder {
+  color: rgba(104, 114, 127, 0.76);
+}
+
+.settings-row .path-input-row {
+  width: 100%;
 }
 
 .template-modal-backdrop {
@@ -3202,6 +3377,7 @@ input {
   .path-input-row {
     min-width: 0;
   }
+
 }
 
 .dependency-log-backdrop {

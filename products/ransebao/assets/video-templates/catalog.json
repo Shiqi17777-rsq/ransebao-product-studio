@@ -1,0 +1,18 @@
+{
+  "default_template": "beauty-hair-transformation",
+  "templates": [
+    {
+      "id": "beauty-hair-transformation",
+      "name": "\u9ad8\u989c\u503c\u67d3\u540e\u7206\u70b9\u53d8\u7f8e\u89c6\u9891",
+      "description": "\u0031\u0035\u0020\u79d2\u0020\u0031\u0036\u003a\u0039\u0020\u6a2a\u5c4f\uff0c\u9ad8\u7ea7\u6c99\u9f99\u67d3\u540e\u53d8\u7f8e\u8282\u594f\uff0c\u524d\u6bb5\u94fa\u57ab\u3001\u4e2d\u6bb5\u84c4\u529b\u3001\u540e\u6bb5\u7206\u70b9\u6536\u4f4f\u3002",
+      "template_video": "beauty-hair-transformation/template.mp4",
+      "prompt_template": "beauty-hair-transformation/prompt_template.txt",
+      "douyin_note_template": "beauty-hair-transformation/douyin_note_template.txt",
+      "xiaohongshu_body_template": "beauty-hair-transformation/xiaohongshu_body_template.txt",
+      "model_version": "seedance2.0_vip",
+      "duration": 15,
+      "ratio": "16:9",
+      "video_resolution": "720p"
+    }
+  ]
+}

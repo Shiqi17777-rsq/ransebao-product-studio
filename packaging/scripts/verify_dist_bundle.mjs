@@ -111,7 +111,14 @@ const bundledPythonBin = firstExisting(target.bundledPythonCandidates);
 info(`Checking ${target.platform} bundle: ${target.label}`);
 assertExists(target.resourcesPath, "resources directory");
 assertExists(path.join(bundledProductStudioRoot, "engine", "cli.py"), "product-studio engine.cli");
+assertExists(path.join(bundledProductStudioRoot, "engine", "services", "adapter_execution.py"), "adapter execution service");
+assertExists(path.join(bundledProductStudioRoot, "adapters", "image", "nano_banana_pro.py"), "Nano Banana Pro image adapter");
+assertExists(path.join(bundledProductStudioRoot, "adapters", "video", "dreamina_cli.py"), "Dreamina video adapter");
+assertExists(path.join(bundledProductStudioRoot, "docs", "project-memory", "README.md"), "project memory README");
 assertExists(path.join(bundledProductStudioRoot, "products", "ransebao", "product.json"), "ransebao product config");
+assertExists(path.join(bundledProductStudioRoot, "products", "ransebao", "assets", "video-templates", "catalog.json"), "video template catalog");
+assertExists(path.join(bundledProductStudioRoot, "products", "ransebao", "assets", "video-templates", "beauty-hair-transformation", "template.mp4"), "built-in video template");
+assertExists(path.join(bundledProductStudioRoot, "products", "ransebao", "assets", "video-templates", "beauty-hair-transformation", "prompt_template.txt"), "video prompt template");
 assertExists(path.join(bundledProductStudioRoot, "runtime", "config", "local.example.json"), "local.example.json");
 assertExists(path.join(bundledProductStudioRoot, "packaging", "dependency_profiles.json"), "dependency_profiles.json");
 if (!bundledPythonBin) {

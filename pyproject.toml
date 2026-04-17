@@ -1,6 +1,6 @@
 [project]
 name = "product-studio"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local-first workflow product shell for portable customer delivery."
 requires-python = ">=3.11"
 dependencies = []

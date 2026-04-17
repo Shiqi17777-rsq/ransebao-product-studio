@@ -4,9 +4,13 @@ import argparse
 import json
 from pathlib import Path
 
-from adapters.image.dreamina_cli import plan_generation
+from adapters.image.dreamina_cli import plan_generation as plan_dreamina_generation
+from adapters.image.nano_banana_pro import plan_generation as plan_nano_banana_generation
 from adapters.publish.douyin_cli import plan_publish as plan_douyin_publish
+from adapters.publish.douyin_video_cli import plan_publish as plan_douyin_video_publish
 from adapters.publish.xiaohongshu_cli import plan_publish as plan_xhs_publish
+from adapters.publish.xiaohongshu_video_cli import plan_publish as plan_xhs_video_publish
+from adapters.video.dreamina_cli import plan_generation as plan_dreamina_video_generation
 
 from .core.config import load_local_runtime_config, load_product_config
 from .core.paths import AppPaths, resolve_root, resolve_runtime_root
@@ -55,18 +59,29 @@ def build_parser() -> argparse.ArgumentParser:
     prompt_parser.add_argument("--template-id", help="Override template id for prompt generation.")
     prompt_parser.add_argument("--slot", type=int, help="Template slot for prompt generation.")
 
-    plan_parser = subparsers.add_parser("plan-execution", help="Build adapter execution plans for image and publish steps.")
+    plan_parser = subparsers.add_parser("plan-execution", help="Build adapter execution plans for image, video, and publish steps.")
     plan_parser.add_argument("--product", default="ransebao", help="Product package id.")
     plan_parser.add_argument("--date", help="Target date in YYYY-MM-DD.")
     plan_parser.add_argument("--template-id", help="Override template id for image execution planning.")
     plan_parser.add_argument("--slot", type=int, help="Template slot for image execution planning.")
 
-    execute_parser = subparsers.add_parser("execute-adapters", help="Run adapter execution for image and/or publish steps.")
+    execute_parser = subparsers.add_parser("execute-adapters", help="Run adapter execution for image, video, and/or publish steps.")
     execute_parser.add_argument("--product", default="ransebao", help="Product package id.")
     execute_parser.add_argument("--date", help="Target date in YYYY-MM-DD.")
     execute_parser.add_argument(
         "--scope",
-        choices=["all", "image", "publish", "xiaohongshu", "douyin", "none"],
+        choices=[
+            "all",
+            "image",
+            "video",
+            "publish",
+            "xiaohongshu",
+            "douyin",
+            "video_publish",
+            "video_xiaohongshu",
+            "video_douyin",
+            "none",
+        ],
         default="all",
         help="Which adapters to execute.",
     )
@@ -106,8 +121,11 @@ def build_adapter_plans(
     *,
     template_id_override: str | None = None,
     slot: int | None = None,
-) -> tuple[dict, dict[str, dict]]:
+) -> tuple[dict, dict, dict[str, dict]]:
     local_config = load_local_runtime_config(paths.runtime_config_dir)
+    video_prompt_result = build_video_prompt_result(paths, product_id, date_str)
+    video_plan = plan_dreamina_video_generation(video_prompt_result["payload"], local_config)
+    video_publish_payload = load_video_publish_payload(paths, product_id, video_plan)
     try:
         prompt_result = build_prompt_assets.run(
             paths,
@@ -119,17 +137,62 @@ def build_adapter_plans(
         prompt_payload = prompt_result.get("payload") or load_json_file(prompt_result["json_path"])
         prompt_result = {key: value for key, value in prompt_result.items() if key != "payload"}
         publish_images = load_publish_images(paths, product_id, local_config)
+        image_provider = normalize_image_provider(local_config)
         plans = {
-            "image": plan_generation(prompt_payload, local_config),
+            "image": (
+                plan_nano_banana_generation(prompt_payload, local_config)
+                if image_provider == "nano_banana_pro"
+                else plan_dreamina_generation(prompt_payload, local_config)
+            ),
+            "video": video_plan,
             "xiaohongshu": plan_xhs_publish(prompt_payload, local_config, publish_images),
             "douyin": plan_douyin_publish(prompt_payload, local_config, publish_images),
+            "video_xiaohongshu": plan_xhs_video_publish(video_publish_payload, local_config),
+            "video_douyin": plan_douyin_video_publish(video_publish_payload, local_config),
         }
-        return prompt_result, plans
+        return prompt_result, video_prompt_result, plans
     except FileNotFoundError as exc:
         if not is_missing_brief_error(exc):
             raise
         target_date = date_str or build_prompt_assets.today_str()
-        return build_blocked_adapter_plans(target_date, product_id, str(exc))
+        prompt_result, plans = build_blocked_adapter_plans(target_date, product_id, str(exc), include_video=False)
+        plans["video"] = video_plan
+        plans["video_xiaohongshu"] = plan_xhs_video_publish(video_publish_payload, local_config)
+        plans["video_douyin"] = plan_douyin_video_publish(video_publish_payload, local_config)
+        return prompt_result, video_prompt_result, plans
+
+
+def build_video_prompt_result(paths: AppPaths, product_id: str, date_str: str | None = None) -> dict:
+    target_date = date_str or build_prompt_assets.today_str()
+    prompt_stub_path = paths.runtime_product_outputs_dir(product_id) / "image_prompts" / f"{target_date}_video_template_stub.txt"
+    json_path = paths.runtime_product_state_dir(product_id) / "current_video_prompt_stub.json"
+    prompt_stub_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    if not prompt_stub_path.exists():
+        prompt_stub_path.write_text(
+            "Video prompt is rendered from the built-in template and selected hair color at plan time.\n",
+            encoding="utf-8",
+        )
+
+    payload = {
+        "date": target_date,
+        "product_id": product_id,
+        "status": "video_template_prompt",
+        "artifacts": {
+            "prompt_txt": str(prompt_stub_path),
+        },
+        "publish": {},
+    }
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "date": target_date,
+        "status": "video_template_prompt",
+        "json_path": str(json_path),
+        "prompt_path": str(prompt_stub_path),
+        "markdown_path": "",
+        "env_path": "",
+        "payload": payload,
+    }
 
 
 def is_missing_brief_error(exc: FileNotFoundError) -> bool:
@@ -152,7 +215,13 @@ def blocked_plan(adapter: str, reason: str) -> dict:
     }
 
 
-def build_blocked_adapter_plans(target_date: str, product_id: str, reason: str) -> tuple[dict, dict[str, dict]]:
+def build_blocked_adapter_plans(
+    target_date: str,
+    product_id: str,
+    reason: str,
+    *,
+    include_video: bool = True,
+) -> tuple[dict, dict[str, dict]]:
     prompt_result = {
         "date": target_date,
         "product_id": product_id,
@@ -167,7 +236,31 @@ def build_blocked_adapter_plans(target_date: str, product_id: str, reason: str) 
         "xiaohongshu": blocked_plan("xiaohongshu", reason),
         "douyin": blocked_plan("douyin", reason),
     }
+    if include_video:
+        plans["video"] = blocked_plan("dreamina-video", reason)
     return prompt_result, plans
+
+
+def normalize_image_provider(local_config: dict) -> str:
+    raw = str((local_config.get("image") or {}).get("provider") or "dreamina").strip().lower()
+    normalized = raw.replace("-", "_").replace(" ", "_")
+    if normalized in {"nano", "nanobanana", "nano_banana", "nano_banana_pro", "gemini", "gemini_image"}:
+        return "nano_banana_pro"
+    return "dreamina"
+
+
+def sanitize_plan_for_output(value):
+    if isinstance(value, dict):
+        sanitized = {}
+        for key, item in value.items():
+            if "api_key" in str(key).lower() or str(key).lower() in {"key", "token", "secret"}:
+                sanitized[key] = "<redacted>" if item else ""
+            else:
+                sanitized[key] = sanitize_plan_for_output(item)
+        return sanitized
+    if isinstance(value, list):
+        return [sanitize_plan_for_output(item) for item in value]
+    return value
 
 
 def execute_adapters_command(
@@ -180,30 +273,40 @@ def execute_adapters_command(
     template_id_override: str | None = None,
     slot: int | None = None,
 ) -> dict:
-    prompt_result, plans = build_adapter_plans(
+    prompt_result, video_prompt_result, plans = build_adapter_plans(
         paths,
         product_id,
         date_str,
         template_id_override=template_id_override,
         slot=slot,
     )
-    target_date = prompt_result["date"]
+    target_date = video_prompt_result.get("date") or prompt_result["date"]
     execute_image = scope in {"all", "image"}
+    execute_video = scope == "video"
     execute_xhs = scope in {"all", "publish", "xiaohongshu"}
     execute_douyin = scope in {"all", "publish", "douyin"}
+    execute_video_xhs = scope in {"video_publish", "video_xiaohongshu"}
+    execute_video_douyin = scope in {"video_publish", "video_douyin"}
     execute_publish = execute_xhs or execute_douyin
+    execute_video_publish = execute_video_xhs or execute_video_douyin
     results = {
         "image": execute_named_plan("image", plans["image"], execute=execute_image),
+        "video": execute_named_plan("video", plans["video"], execute=execute_video),
         "xiaohongshu": execute_named_plan("xiaohongshu", plans["xiaohongshu"], execute=execute_xhs),
         "douyin": execute_named_plan("douyin", plans["douyin"], execute=execute_douyin),
+        "video_xiaohongshu": execute_named_plan("video_xiaohongshu", plans["video_xiaohongshu"], execute=execute_video_xhs),
+        "video_douyin": execute_named_plan("video_douyin", plans["video_douyin"], execute=execute_video_douyin),
     }
     payload = {
         "date": target_date,
         "product_id": product_id,
-        "mode": "execute" if (execute_image or execute_publish) else "plan",
+        "mode": "execute" if (execute_image or execute_video or execute_publish or execute_video_publish) else "plan",
         "execute_image": execute_image,
+        "execute_video": execute_video,
         "execute_publish": execute_publish,
+        "execute_video_publish": execute_video_publish,
         "prompt_result": prompt_result,
+        "video_prompt_result": video_prompt_result,
         "results": results,
     }
     payload["artifacts"] = write_execution_report(paths, product_id, target_date, payload)
@@ -226,7 +329,7 @@ def run_daily_command(paths: AppPaths, product_id: str, date_str: str | None = N
     router_result = route_topics.run(paths, product_id, date_str)
     briefs_result = build_briefs.run(paths, product_id, date_str)
     best_result = select_best_brief.run(paths, product_id, date_str)
-    prompt_result, plans = build_adapter_plans(paths, product_id, date_str)
+    prompt_result, video_prompt_result, plans = build_adapter_plans(paths, product_id, date_str)
     execution_payload = execute_adapters_command(
         paths,
         product_id,
@@ -258,7 +361,8 @@ def run_daily_command(paths: AppPaths, product_id: str, date_str: str | None = N
             "build_briefs": briefs_result,
             "select_best_brief": best_result,
             "build_image_prompt": prompt_result,
-            "adapter_plans": plans,
+            "build_video_prompt": video_prompt_result,
+            "adapter_plans": sanitize_plan_for_output(plans),
             "adapter_execution": execution_payload,
         },
         "remaining": [] if execute else [
@@ -363,6 +467,32 @@ def load_publish_images(paths: AppPaths, product_id: str, local_config: dict[str
         payload["items"] = items
         gallery_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return normalized[:3]
+
+
+def load_video_publish_payload(paths: AppPaths, product_id: str, video_plan: dict) -> dict:
+    state_dir = paths.runtime_product_state_dir(product_id)
+    generation_path = state_dir / "current_video_generation_state.json"
+    gallery_path = state_dir / "current_video_gallery.json"
+    generation_payload = load_json_file(str(generation_path)) if generation_path.exists() else {}
+    gallery_payload = load_json_file(str(gallery_path)) if gallery_path.exists() else {}
+    generation_state = generation_payload if isinstance(generation_payload, dict) else {}
+    gallery_item = gallery_payload.get("item", {}) if isinstance(gallery_payload, dict) else {}
+
+    return {
+        "date": gallery_payload.get("date") or generation_state.get("date") or video_plan.get("date"),
+        "video_path": (
+            _existing_file(gallery_item.get("videoPath"))
+            or _existing_file(generation_state.get("videoPath"))
+            or _existing_file(video_plan.get("video_path"))
+        ),
+        "template_id": gallery_item.get("templateId") or generation_state.get("templateId") or video_plan.get("template_id"),
+        "template_name": gallery_item.get("templateName") or generation_state.get("templateName") or video_plan.get("template_name"),
+        "hair_color_name": gallery_item.get("hairColorName") or generation_state.get("hairColorName") or video_plan.get("hair_color_name"),
+        "douyin_note_text": gallery_item.get("douyinNoteText") or generation_state.get("douyinNoteText") or video_plan.get("douyin_note_text"),
+        "douyin_note_path": gallery_item.get("douyinNotePath") or generation_state.get("douyinNotePath") or video_plan.get("douyin_note_path"),
+        "xiaohongshu_body": gallery_item.get("xiaohongshuBody") or generation_state.get("xiaohongshuBody") or video_plan.get("xiaohongshu_body"),
+        "xiaohongshu_body_path": gallery_item.get("xiaohongshuBodyPath") or generation_state.get("xiaohongshuBodyPath") or video_plan.get("xiaohongshu_body_path"),
+    }
 
 
 def main() -> int:

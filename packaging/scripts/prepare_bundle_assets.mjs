@@ -365,6 +365,7 @@ function buildProductStudioFilter(sourceRoot) {
     const relative = normalizeRelative(sourceRoot, candidate);
     const name = path.basename(candidate);
     if (name === ".DS_Store" || name === "__pycache__") return false;
+    if (/^tmp_.*\.(json|txt)$/i.test(name)) return false;
     if (excludedFiles.has(relative)) return false;
     if (anyPrefix(relative, excludedPrefixes)) return false;
     return true;

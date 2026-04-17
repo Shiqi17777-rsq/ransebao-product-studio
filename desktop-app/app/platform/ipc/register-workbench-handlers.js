@@ -47,6 +47,8 @@ function registerWorkbenchIpcHandlers(deps) {
     persistTemplateSelection,
     syncDesktopAutomationSchedule,
     readDesktopAutomationSettings,
+    syncVideoAutomationSchedule,
+    readVideoAutomationSettings,
     normalizeDailyTime,
     normalizeAccountName,
     patchAccounts,
@@ -129,17 +131,28 @@ function registerWorkbenchIpcHandlers(deps) {
   });
 
   ipcMain.handle(IPC_CHANNELS.automationSaveSettings, async (_event, payload) => {
-    const nextState = syncDesktopAutomationSchedule({
-      ...readDesktopAutomationSettings(),
+    const kind = payload?.kind === "video" ? "video" : "desktop";
+    const readSettings = kind === "video" ? readVideoAutomationSettings : readDesktopAutomationSettings;
+    const syncSettings = kind === "video" ? syncVideoAutomationSchedule : syncDesktopAutomationSchedule;
+    const currentSettings = readSettings();
+    const nextState = syncSettings({
+      ...currentSettings,
       enabled: Boolean(payload?.enabled),
-      dailyTime: normalizeDailyTime(payload?.dailyTime || "09:00"),
-      lastResultSummary: readDesktopAutomationSettings().lastResultSummary,
-      lastRunAt: readDesktopAutomationSettings().lastRunAt,
-      lastRunStatus: readDesktopAutomationSettings().lastRunStatus,
-      lastError: readDesktopAutomationSettings().lastError,
-      lastTrigger: readDesktopAutomationSettings().lastTrigger
+      dailyTime: normalizeDailyTime(
+        payload?.dailyTime || (kind === "video" ? "09:30" : "09:00")
+      ),
+      lastResultSummary: currentSettings.lastResultSummary,
+      lastRunAt: currentSettings.lastRunAt,
+      lastRunStatus: currentSettings.lastRunStatus,
+      lastError: currentSettings.lastError,
+      lastTrigger: currentSettings.lastTrigger
     });
-    return { ok: true, state: nextState, path: currentArtifacts().desktopAutomation };
+    return {
+      ok: true,
+      kind,
+      state: nextState,
+      path: kind === "video" ? currentArtifacts().videoAutomation : currentArtifacts().desktopAutomation
+    };
   });
 
   ipcMain.handle(IPC_CHANNELS.accountsLogin, async (_event, payload) => {

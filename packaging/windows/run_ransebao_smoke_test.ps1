@@ -67,16 +67,33 @@ $checks.Add((New-CheckResult -Name "environment_report" -Ok (Test-Path -LiteralP
 $checks.Add((New-CheckResult -Name "dependency_install_state" -Ok (Test-Path -LiteralPath $dependencyInstallStatePath) -Details $dependencyInstallStatePath))
 
 $dependencyItems = @{}
+$dependencyInstallItems = @{}
 if (Test-Path -LiteralPath $dependencyReportPath) {
     try {
-        $dependencyReport = Get-Content -LiteralPath $dependencyReportPath -Raw | ConvertFrom-Json
+        $dependencyReport = Get-Content -LiteralPath $dependencyReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($dependencyReport.installItems) {
+            foreach ($item in $dependencyReport.installItems.PSObject.Properties) {
+                $readyProperty = $item.Value.PSObject.Properties["ready"]
+                $statusProperty = $item.Value.PSObject.Properties["status"]
+                $messageProperty = $item.Value.PSObject.Properties["message"]
+                $dependencyInstallItems[$item.Name] = [PSCustomObject]@{
+                    detected = $item.Value.detected
+                    ready    = $(if ($readyProperty) { $readyProperty.Value } else { $null })
+                    status   = $(if ($statusProperty) { $statusProperty.Value } else { "" })
+                    message  = $(if ($messageProperty) { $messageProperty.Value } else { "" })
+                }
+            }
+        }
         if ($dependencyReport.items) {
             foreach ($item in $dependencyReport.items.PSObject.Properties) {
+                $readyProperty = $item.Value.PSObject.Properties["ready"]
+                $statusProperty = $item.Value.PSObject.Properties["status"]
+                $messageProperty = $item.Value.PSObject.Properties["message"]
                 $dependencyItems[$item.Name] = [PSCustomObject]@{
                     detected = $item.Value.detected
-                    ready    = $item.Value.ready
-                    status   = $item.Value.status
-                    message  = $item.Value.message
+                    ready    = $(if ($readyProperty) { $readyProperty.Value } else { $null })
+                    status   = $(if ($statusProperty) { $statusProperty.Value } else { "" })
+                    message  = $(if ($messageProperty) { $messageProperty.Value } else { "" })
                 }
             }
         }
@@ -85,6 +102,30 @@ if (Test-Path -LiteralPath $dependencyReportPath) {
     }
 }
 
+$requiredDependencies = @(
+    @{ Id = "bundleAssets"; Label = "bundleAssets" },
+    @{ Id = "bundledPython"; Label = "bundledPython" },
+    @{ Id = "sau"; Label = "sau" },
+    @{ Id = "patchrightChromium"; Label = "patchrightChromium" },
+    @{ Id = "dreamina"; Label = "dreamina" }
+)
+
+foreach ($required in $requiredDependencies) {
+    $item = $dependencyInstallItems[$required.Id]
+    $ok = $false
+    $details = "Dependency item missing from current_dependency_report.json."
+
+    if ($item) {
+        $status = [string]$item.status
+        $ok = ($status -eq "ready") -or ([bool]$item.ready)
+        $details = "status=$status; detected=$($item.detected); ready=$($item.ready); message=$($item.message)"
+    }
+
+    $checks.Add((New-CheckResult -Name ("dependency_ready_{0}" -f $required.Label) -Ok $ok -Critical $true -Details $details))
+}
+
+$checksArray = @($checks | ForEach-Object { $_ })
+
 $report = [PSCustomObject]@{
     GeneratedAt         = (Get-Date).ToString("s")
     AppDataName         = $AppDataName
@@ -92,8 +133,9 @@ $report = [PSCustomObject]@{
     UserDataRoot        = $userDataRoot
     RuntimeBase         = $runtimeBase
     ProcessSummary      = $processSummary
-    Checks              = @($checks)
+    Checks              = $checksArray
     DependencyItems     = $dependencyItems
+    DependencyInstallItems = $dependencyInstallItems
 }
 
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -102,7 +144,7 @@ Write-JsonFile -Path $reportPath -Value $report
 
 Write-Host ""
 Write-Host "Ransebao smoke test summary" -ForegroundColor Green
-$checks | Format-Table -AutoSize | Out-String | Write-Host
+$checksArray | Format-Table -AutoSize | Out-String | Write-Host
 
 if ($dependencyItems.Count -gt 0) {
     Write-Host "Dependency snapshot:"
@@ -115,7 +157,7 @@ if ($dependencyItems.Count -gt 0) {
 Write-Host ""
 Write-Host ("Saved report: {0}" -f $reportPath)
 
-$hasCriticalFailure = $checks | Where-Object { $_.Critical -and -not $_.Ok }
+$hasCriticalFailure = $checksArray | Where-Object { $_.Critical -and -not $_.Ok }
 if ($hasCriticalFailure) {
     exit 1
 }

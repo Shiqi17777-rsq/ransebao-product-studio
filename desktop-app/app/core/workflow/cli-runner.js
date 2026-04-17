@@ -25,27 +25,63 @@ function buildCliEnv() {
   };
 }
 
+function formatSpawnError(pythonBin, args, error) {
+  return [
+    `Failed to start Python workflow runner: ${pythonBin}`,
+    error?.message || String(error || ""),
+    `Args: ${args.join(" ")}`
+  ].filter(Boolean).join("\n");
+}
+
 function createCliRunner(deps) {
   function runCli(command, options = {}) {
     const args = buildCliArgs(deps.runtimeBaseDir, command, options);
     const pythonBin = deps.resolvePythonBin(deps.readLocalRuntimeConfig(), options.dependencyReport);
 
     return new Promise((resolve) => {
-      const child = deps.spawn(pythonBin, args, {
-        cwd: deps.productStudioRoot,
-        env: buildCliEnv()
-      });
+      let child = null;
       let stdout = "";
       let stderr = "";
+      let settled = false;
+      const finalize = (payload) => {
+        if (settled) return;
+        settled = true;
+        resolve(payload);
+      };
 
-      child.stdout.on("data", (chunk) => {
+      try {
+        child = deps.spawn(pythonBin, args, {
+          cwd: deps.productStudioRoot,
+          env: buildCliEnv()
+        });
+      } catch (error) {
+        finalize({
+          ok: false,
+          code: null,
+          stdout,
+          stderr: formatSpawnError(pythonBin, args, error),
+          parsed: null
+        });
+        return;
+      }
+
+      child.stdout?.on("data", (chunk) => {
         stdout += chunk.toString();
       });
-      child.stderr.on("data", (chunk) => {
+      child.stderr?.on("data", (chunk) => {
         stderr += chunk.toString();
       });
+      child.on("error", (error) => {
+        finalize({
+          ok: false,
+          code: null,
+          stdout,
+          stderr: stderr || formatSpawnError(pythonBin, args, error),
+          parsed: null
+        });
+      });
       child.on("close", (code) => {
-        resolve({
+        finalize({
           ok: code === 0,
           code,
           stdout,
@@ -59,24 +95,50 @@ function createCliRunner(deps) {
   function spawnCliTask(command, options = {}, handlers = {}) {
     const args = buildCliArgs(deps.runtimeBaseDir, command, options);
     const pythonBin = deps.resolvePythonBin(deps.readLocalRuntimeConfig(), options.dependencyReport);
-    const child = deps.spawn(pythonBin, args, {
-      cwd: deps.productStudioRoot,
-      env: buildCliEnv()
-    });
+    let child = null;
     let stdout = "";
     let stderr = "";
 
+    try {
+      child = deps.spawn(pythonBin, args, {
+        cwd: deps.productStudioRoot,
+        env: buildCliEnv()
+      });
+    } catch (error) {
+      const formatted = formatSpawnError(pythonBin, args, error);
+      handlers.onStderr?.(formatted);
+      handlers.onClose?.({
+        ok: false,
+        code: null,
+        stdout,
+        stderr: formatted,
+        parsed: null
+      });
+      return null;
+    }
+
     handlers.onStart?.({ command, pid: child.pid, args });
 
-    child.stdout.on("data", (chunk) => {
+    child.stdout?.on("data", (chunk) => {
       const text = chunk.toString();
       stdout += text;
       handlers.onStdout?.(text);
     });
-    child.stderr.on("data", (chunk) => {
+    child.stderr?.on("data", (chunk) => {
       const text = chunk.toString();
       stderr += text;
       handlers.onStderr?.(text);
+    });
+    child.on("error", (error) => {
+      stderr ||= formatSpawnError(pythonBin, args, error);
+      handlers.onStderr?.(stderr);
+      handlers.onClose?.({
+        ok: false,
+        code: null,
+        stdout,
+        stderr,
+        parsed: null
+      });
     });
     child.on("close", (code) => {
       handlers.onClose?.({

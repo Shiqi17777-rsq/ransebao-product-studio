@@ -4,6 +4,7 @@ const state = {
   currentPage: "upstream",
   selectedBriefId: null,
   selectedTemplates: [],
+  selectedVideoTemplateId: null,
   activeTemplateSlot: null,
   activePreviewImage: null,
   accountModal: null,
@@ -26,6 +27,11 @@ const PAGE_META = {
     label: "图片模板",
     title: "先选模板，再让系统根据 brief 去生成图片",
     description: "不把 prompt 暴露给用户，只让用户控制模板、结果和重生成。"
+  },
+  video: {
+    label: "视频生成",
+    title: "用设备图生成本地短视频",
+    description: "视频是独立模块，第一版只生成和本地展示，不进入发布链。"
   },
   publish: {
     label: "发布确认",
@@ -88,6 +94,36 @@ const ACTION_META = {
     detail: "图片任务已经提交，等待结果返回。",
     stepLabel: "生成图片"
   },
+  "execute-video": {
+    label: "视频生成",
+    title: "正在生成视频",
+    detail: "即梦全能参考视频任务已经提交，等待结果返回。",
+    stepLabel: "生成视频"
+  },
+  "execute-video-regenerate": {
+    label: "视频生成",
+    title: "正在重新生成视频",
+    detail: "会按当前模板、参考图和参数重新跑一轮视频生成。",
+    stepLabel: "重新生成视频"
+  },
+  "execute-video-xiaohongshu": {
+    label: "视频发布",
+    title: "正在发布视频到小红书",
+    detail: "会使用当前生成的视频和模板文案继续发布到小红书。",
+    stepLabel: "发布视频到小红书"
+  },
+  "execute-video-douyin": {
+    label: "视频发布",
+    title: "正在发布视频到抖音",
+    detail: "会使用当前生成的视频和模板文案继续发布到抖音。",
+    stepLabel: "发布视频到抖音"
+  },
+  "execute-video-publish": {
+    label: "视频发布",
+    title: "正在双平台发布视频",
+    detail: "会使用当前生成的视频和模板文案同步发布到两个平台。",
+    stepLabel: "双平台视频发布"
+  },
   "execute-xiaohongshu": {
     label: "发布确认",
     title: "正在发布到小红书",
@@ -117,6 +153,18 @@ const ACTION_META = {
     title: "正在运行本地自动化",
     detail: "会使用当前已选的 3 套模板，并执行今天的完整流程。",
     stepLabel: "自动化执行"
+  },
+  "save-video-automation": {
+    label: "视频自动化",
+    title: "正在保存视频自动化",
+    detail: "会把视频生成和视频发布的每日定时写入本地客户端。",
+    stepLabel: "保存视频自动化"
+  },
+  "run-video-automation": {
+    label: "视频自动化",
+    title: "正在运行视频自动化",
+    detail: "会先生成当前视频，等 mp4 下载完成后再继续发布。",
+    stepLabel: "运行视频自动化"
   },
   "save-brief-draft": {
     label: "今日 brief",
@@ -165,6 +213,12 @@ const ACTION_META = {
     title: "正在保存本地路径",
     detail: "把 Dreamina、设备图、下载目录和发布工具根目录写入本地配置。",
     stepLabel: "保存本地路径"
+  },
+  "save-media-config": {
+    label: "媒体生成",
+    title: "正在保存媒体配置",
+    detail: "把图片 provider、用户自备 Gemini API Key 和视频默认参数写入本地配置。",
+    stepLabel: "保存媒体配置"
   },
   "inspect-dependencies": {
     label: "首次启动向导",
@@ -224,6 +278,7 @@ const MOTION_SELECTORS = [
   ".quick-grid > *",
   ".template-slot-grid > *",
   ".template-result-grid > *",
+  ".video-template-grid > *",
   ".template-modal-grid > *",
   ".account-list > *",
   ".env-status-list > *",
@@ -244,6 +299,7 @@ const POINTER_SURFACE_SELECTORS = [
   ".template-card",
   ".template-slot-card",
   ".template-result-card",
+  ".video-template-card",
   ".template-result-meta > div",
   ".content-title-box",
   ".content-preview-block",
@@ -262,6 +318,39 @@ function $(id) {
 function setText(id, value) {
   const el = $(id);
   if (el) el.textContent = value;
+}
+
+function setValue(id, value) {
+  const el = $(id);
+  if (el) el.value = value;
+}
+
+function firstInputValue(ids, fallback = "") {
+  for (const id of ids) {
+    const el = $(id);
+    if (el && el.value !== undefined && el.value !== "") return el.value;
+  }
+  return fallback;
+}
+
+function mediaConfigInputValue(videoId, settingsId, fallback = "") {
+  const ids = state.currentPage === "settings"
+    ? [settingsId, videoId]
+    : [videoId, settingsId];
+  return firstInputValue(ids, fallback);
+}
+
+function fileNameFromPath(value = "") {
+  const normalized = String(value || "").replace(/\\/g, "/");
+  return normalized.split("/").filter(Boolean).pop() || "";
+}
+
+function fileStemFromPath(value = "") {
+  return fileNameFromPath(value).replace(/\.[^.]+$/, "");
+}
+
+function firstNonEmptyArray(...values) {
+  return values.find((value) => Array.isArray(value) && value.length) || [];
 }
 
 function safeString(value, fallback = "—") {
@@ -356,10 +445,16 @@ async function handleWorkflowProgress(payload) {
 
   if ([
     "execute-image",
+    "execute-video",
+    "execute-video-regenerate",
+    "execute-video-xiaohongshu",
+    "execute-video-douyin",
+    "execute-video-publish",
     "execute-xiaohongshu",
     "execute-douyin",
     "execute-publish",
-    "run-desktop-automation"
+    "run-desktop-automation",
+    "run-video-automation"
   ].includes(payload.action)) {
     if (payload.state === "running") {
       logOutput(payload.detail || "任务正在后台执行…");
@@ -370,7 +465,7 @@ async function handleWorkflowProgress(payload) {
       logOutput(formatWorkflowOutput(payload.result || {
         ok: payload.state === "success",
         stdout: payload.detail || "",
-        stderr: payload.state === "error" ? payload.detail || "图片任务执行失败。" : ""
+        stderr: payload.state === "error" ? payload.detail || "任务执行失败。" : ""
       }));
       await refreshDashboard(state.environmentReport);
     }
@@ -546,6 +641,61 @@ function getTemplateMeta(templateId) {
     name: TEMPLATE_META[templateId]?.name || templateId,
     description: TEMPLATE_META[templateId]?.description || "",
     previewImagePath: null
+  };
+}
+
+function videoTemplateCatalog() {
+  const items = state.dashboard?.videoTemplateCatalog?.templates;
+  if (Array.isArray(items) && items.length) return items;
+  const fallbackId = safeString(
+    state.selectedVideoTemplateId ||
+      state.dashboard?.localConfig?.video?.templateId ||
+      state.dashboard?.videoGallery?.item?.templateId ||
+      state.dashboard?.environmentReport?.plan?.results?.video?.template_id ||
+      "beauty-hair-transformation",
+    "beauty-hair-transformation"
+  );
+  return [
+    {
+      id: fallbackId,
+      name: safeString(
+        state.dashboard?.videoGallery?.item?.templateName ||
+          state.dashboard?.environmentReport?.plan?.results?.video?.template_name ||
+          "高颜值染后爆点变美视频"
+      ),
+      description: "",
+      templateVideoPath:
+        state.dashboard?.videoGallery?.item?.templateVideoPath ||
+        state.dashboard?.environmentReport?.plan?.results?.video?.template_video_path ||
+        "",
+      modelVersion: safeString(state.dashboard?.localConfig?.video?.modelVersion, "seedance2.0_vip"),
+      duration: Number(state.dashboard?.localConfig?.video?.duration || 15),
+      ratio: safeString(state.dashboard?.localConfig?.video?.ratio, "16:9"),
+      videoResolution: safeString(state.dashboard?.localConfig?.video?.videoResolution, "720p")
+    }
+  ];
+}
+
+function resolveVideoTemplateId(preferredId = "") {
+  const catalog = videoTemplateCatalog();
+  const preferred = safeString(preferredId, "").trim();
+  if (preferred && catalog.some((item) => item.id === preferred)) return preferred;
+  const defaultId = safeString(state.dashboard?.videoTemplateCatalog?.defaultTemplateId, "");
+  if (defaultId && catalog.some((item) => item.id === defaultId)) return defaultId;
+  return catalog[0]?.id || "beauty-hair-transformation";
+}
+
+function getVideoTemplateMeta(templateId) {
+  const resolvedId = resolveVideoTemplateId(templateId);
+  return videoTemplateCatalog().find((item) => item.id === resolvedId) || {
+    id: resolvedId,
+    name: "高颜值染后爆点变美视频",
+    description: "",
+    templateVideoPath: "",
+    modelVersion: "seedance2.0_vip",
+    duration: 15,
+    ratio: "16:9",
+    videoResolution: "720p"
   };
 }
 
@@ -746,6 +896,253 @@ function renderTemplateResults() {
 
   bindPointerSurfaces(root);
   refreshMotionDelays(root);
+}
+
+function syncVideoTemplateInputs(template) {
+  if (!template) return;
+  const modelVersion = safeString(template.modelVersion, "seedance2.0_vip");
+  const duration = String(Number(template.duration || 15));
+  const ratio = safeString(template.ratio, "16:9");
+  const videoResolution = safeString(template.videoResolution, "720p");
+  setValue("video-page-model", modelVersion);
+  setValue("media-video-model", modelVersion);
+  setValue("video-page-duration", duration);
+  setValue("media-video-duration", duration);
+  setValue("video-page-ratio", ratio);
+  setValue("media-video-ratio", ratio);
+  setValue("video-page-resolution", videoResolution);
+  setValue("media-video-resolution", videoResolution);
+  applyVideoPreviewRatio(ratio);
+}
+
+async function handleVideoTemplatePick(templateId) {
+  const template = getVideoTemplateMeta(templateId);
+  const payload = {
+    videoTemplateId: template.id,
+    videoModelVersion: safeString(template.modelVersion, "seedance2.0_vip"),
+    videoDuration: Number(template.duration || 15),
+    videoRatio: safeString(template.ratio, "16:9"),
+    videoResolution: safeString(template.videoResolution, "720p")
+  };
+  const currentVideoConfig = state.dashboard?.localConfig?.video || {};
+  const needsSave =
+    payload.videoTemplateId !== safeString(currentVideoConfig.templateId, "") ||
+    payload.videoModelVersion !== safeString(currentVideoConfig.modelVersion, "seedance2.0_vip") ||
+    Number(payload.videoDuration) !== Number(currentVideoConfig.duration || 15) ||
+    payload.videoRatio !== safeString(currentVideoConfig.ratio, "16:9") ||
+    payload.videoResolution !== safeString(currentVideoConfig.videoResolution, "720p");
+
+  state.selectedVideoTemplateId = template.id;
+  syncVideoTemplateInputs(template);
+  renderVideoTemplateSelection();
+  renderVideoGeneration();
+
+  if (!needsSave) {
+    logOutput(`当前视频模板：${template.name}`);
+    return;
+  }
+
+  setButtonsBusy(true);
+  setActionStatus({
+    action: "save-media-config",
+    state: "running",
+    progress: 0.18,
+    indeterminate: true,
+    detail: `正在切换到视频模板：${template.name}`,
+    stepLabel: "同步模板默认参数"
+  });
+  logOutput(`正在切换视频模板：${template.name}`);
+  try {
+    const result = await window.desktopApp.saveLocalConfig(payload);
+    state.environmentReport = null;
+    clearEnvironmentStatus();
+    setActionStatus({
+      action: "save-media-config",
+      state: result?.ok ? "success" : "error",
+      progress: result?.ok ? 1 : 0.92,
+      detail: result?.ok
+        ? `视频模板已切换为 ${template.name}，推荐参数已同步。`
+        : (result?.error || "视频模板保存失败。"),
+      stepLabel: result?.ok ? "保存完成" : "保存失败"
+    });
+    if (result?.ok) {
+      await refreshDashboard(null);
+    } else {
+      logOutput(result?.error || "视频模板保存失败。");
+    }
+  } finally {
+    setButtonsBusy(false);
+  }
+}
+
+function renderVideoTemplateSelection() {
+  const grid = $("video-template-grid");
+  if (!grid) return;
+  const templates = videoTemplateCatalog();
+  const selectedTemplateId = resolveVideoTemplateId(state.selectedVideoTemplateId);
+  state.selectedVideoTemplateId = selectedTemplateId;
+  setText("video-template-selection-label", `${templates.length} 个模板 · 已选 1`);
+
+  grid.innerHTML = templates
+    .map((template) => {
+      const isSelected = template.id === selectedTemplateId;
+      const preview = template.templateVideoPath
+        ? `<video src="${localPathToAssetUrl(template.templateVideoPath)}" muted loop playsinline autoplay preload="metadata"></video>`
+        : `<div class="video-template-preview-fallback"></div>`;
+      return `
+        <button
+          class="video-template-card ${isSelected ? "is-selected" : ""}"
+          type="button"
+          data-video-template-pick="${template.id}"
+          aria-pressed="${isSelected ? "true" : "false"}"
+        >
+          <div class="video-template-preview">
+            ${preview}
+            <div class="video-template-preview-copy">
+              <strong>${template.ratio || "16:9"} · ${template.duration || 15}s</strong>
+              <span>${isSelected ? "当前模板" : "点击使用"}</span>
+            </div>
+          </div>
+          <div class="video-template-meta">
+            <strong>${template.name}</strong>
+            <p>${template.description || "视频模板只负责节奏展示，真正提交时只上传 3 张设备图、1 张发色图和提示词。"}</p>
+            <small>模板示例仅用于客户端展示，不会作为 Dreamina 上传素材。</small>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+
+  grid.querySelectorAll("[data-video-template-pick]").forEach((button) => {
+    button.addEventListener("click", () => {
+      void handleVideoTemplatePick(button.dataset.videoTemplatePick || "");
+    });
+  });
+
+  bindPointerSurfaces(grid);
+  refreshMotionDelays(grid);
+}
+
+function videoStatusLabel(status) {
+  if (status === "completed") return "已完成";
+  if (status === "running") return "生成中";
+  if (status === "failed") return "失败";
+  return "未生成";
+}
+
+function publishStatusLabel(status) {
+  if (status === "succeeded") return "已完成";
+  if (status === "partial_success") return "部分成功";
+  if (status === "running") return "发布中";
+  if (status === "failed_returncode" || status === "failed_missing_binary") return "失败";
+  if (status === "planned") return "仅规划";
+  return "未发布";
+}
+
+function videoRatioSize(ratio = "9:16") {
+  const [rawWidth, rawHeight] = String(ratio).split(":").map((part) => Number(part));
+  const width = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : 9;
+  const height = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : 16;
+  return { width, height };
+}
+
+function videoPreviewMaxWidth({ width, height }) {
+  if (width === height) return 240;
+  if (width > height) return width / height >= 2 ? 380 : 340;
+  return height / width >= 1.7 ? 180 : 220;
+}
+
+function applyVideoPreviewRatio(ratio = "9:16") {
+  const preview = $("video-preview-frame");
+  if (!preview) return;
+  const size = videoRatioSize(ratio);
+  preview.style.aspectRatio = `${size.width} / ${size.height}`;
+  preview.style.width = `min(100%, ${videoPreviewMaxWidth(size)}px)`;
+  preview.dataset.ratio = `${size.width}:${size.height}`;
+}
+
+function renderVideoGeneration() {
+  const gallery = state.dashboard?.videoGallery || {};
+  const item = gallery.item || {};
+  const videoPlan = state.dashboard?.environmentReport?.plan?.results?.video || {};
+  const selectedTemplate = getVideoTemplateMeta(state.selectedVideoTemplateId);
+  const status = item.status || gallery.status || "pending";
+  const videoPath = item.videoPath || "";
+  const preview = $("video-preview-frame");
+  const badge = $("video-status-badge");
+  const ratio =
+    item.ratio ||
+    videoPlan.ratio ||
+    state.dashboard?.localConfig?.video?.ratio ||
+    selectedTemplate.ratio ||
+    $("video-page-ratio")?.value ||
+    "16:9";
+  applyVideoPreviewRatio(ratio);
+  if (badge) {
+    badge.textContent = videoStatusLabel(status);
+    badge.classList.toggle("is-running", status === "running");
+    badge.classList.toggle("is-error", status === "failed");
+  }
+  if (preview) {
+    preview.innerHTML = "";
+    if (videoPath) {
+      const video = document.createElement("video");
+      video.src = localPathToAssetUrl(videoPath);
+      video.controls = true;
+      preview.appendChild(video);
+    } else {
+      const placeholder = document.createElement("div");
+      placeholder.className = "template-result-placeholder";
+      placeholder.textContent = item.error || "视频生成完成后会显示在这里";
+      preview.appendChild(placeholder);
+    }
+  }
+  const modelLabel = [
+    item.modelVersion || videoPlan.model_version || state.dashboard?.localConfig?.video?.modelVersion || selectedTemplate.modelVersion || "seedance2.0_vip",
+    `${item.duration || videoPlan.duration || state.dashboard?.localConfig?.video?.duration || selectedTemplate.duration || 15}s`,
+    ratio,
+    item.videoResolution || videoPlan.video_resolution || state.dashboard?.localConfig?.video?.videoResolution || selectedTemplate.videoResolution || "720p"
+  ].filter(Boolean).join(" · ");
+  const deviceRefs = firstNonEmptyArray(
+    item.deviceReferenceImages,
+    videoPlan.device_reference_images,
+    state.dashboard?.mediaGeneration?.videoDeviceReferenceImages
+  );
+  const hairColorImage =
+    item.hairColorReferenceImage ||
+    videoPlan.hair_color_reference_image ||
+    state.dashboard?.mediaGeneration?.selectedHairColorImage ||
+    state.dashboard?.localConfig?.video?.selectedHairColorImage ||
+    "";
+  const hairColorName = item.hairColorName || videoPlan.hair_color_name || fileStemFromPath(hairColorImage);
+  const templateName = item.templateName || videoPlan.template_name || "高颜值染后爆点变美视频";
+  const outputDir = item.videoOutputDir || videoPlan.video_output_dir || state.dashboard?.paths?.videoDownloadsDir || "";
+  const resolvedTemplateName = item.templateName || videoPlan.template_name || selectedTemplate.name || templateName;
+  const douyinNoteText = item.douyinNoteText || videoPlan.douyin_note_text || "尚未生成当前视频模板的抖音文案。";
+  const xiaohongshuBody = item.xiaohongshuBody || videoPlan.xiaohongshu_body || "尚未生成当前视频模板的小红书文案。";
+  setText("video-model-label", modelLabel);
+  setText("video-state-label", videoStatusLabel(status));
+  setText("video-path-label", videoPath || item.error || "尚未生成");
+  setText("video-template-label", resolvedTemplateName);
+  setText("video-douyin-body", douyinNoteText);
+  setText("video-xhs-body", xiaohongshuBody);
+  const videoPublishState = state.dashboard?.videoPublishState || {};
+  const xhsPublish = videoPublishState.platforms?.xiaohongshu || {};
+  const douyinPublish = videoPublishState.platforms?.douyin || {};
+  setText("video-publish-file-status", videoPath ? "已就绪" : "未就绪");
+  setText("video-publish-xhs-status", publishStatusLabel(xhsPublish.status));
+  setText("video-publish-douyin-status", publishStatusLabel(douyinPublish.status));
+  setText("video-publish-error", xhsPublish.error || douyinPublish.error || "当前还没有视频发布错误。");
+  setText("video-hair-color-label", hairColorName ? `${hairColorName} · ${fileNameFromPath(hairColorImage)}` : "自动从发色图库随机选择");
+  setText("video-output-dir-label", outputDir || "默认桌面/输出视频");
+  const videoRefs =
+    firstNonEmptyArray(videoPlan.reference_images, state.dashboard?.mediaGeneration?.videoReferenceImages, item.referenceImages);
+  setText(
+    "video-reference-label",
+    videoRefs.length
+      ? `设备图 ${deviceRefs.length}/3 · 发色图 ${hairColorImage ? "1/1" : "0/1"}`
+      : "将使用 3 张设备图 + 1 张发色图"
+  );
 }
 
 function closeTemplateModal() {
@@ -1270,8 +1667,22 @@ function renderOnboarding() {
   if (deviceInput) deviceInput.value = safeString(localConfig.image?.deviceImageDir || dependencyReport?.recommendedConfig?.deviceImageDir, "");
   const downloadsInput = $("onboarding-downloads-dir");
   if (downloadsInput) downloadsInput.value = safeString(localConfig.image?.downloadsDir || dependencyReport?.recommendedConfig?.downloadsDir, "");
+  const hairColorInput = $("onboarding-hair-color-dir");
+  if (hairColorInput) hairColorInput.value = safeString(localConfig.video?.hairColorReferenceDir, "");
+  const videoDownloadsInput = $("onboarding-video-downloads-dir");
+  if (videoDownloadsInput) videoDownloadsInput.value = safeString(localConfig.video?.downloadsDir || state.dashboard?.paths?.videoDownloadsDir, "");
   const sauInput = $("onboarding-sau-root");
   if (sauInput) sauInput.value = safeString(localConfig.publish?.sauRoot || dependencyReport?.recommendedConfig?.sauRoot, "");
+  setValue("onboarding-image-provider", safeString(localConfig.image?.provider, "dreamina"));
+  setValue("onboarding-nano-banana-model", safeString(localConfig.image?.nanoBananaModel, "gemini-3-pro-image-preview-high"));
+  setValue("onboarding-nano-banana-api-base", safeString(localConfig.image?.nanoBananaApiBase, ""));
+  const onboardingGeminiInput = $("onboarding-gemini-api-key");
+  if (onboardingGeminiInput) {
+    onboardingGeminiInput.value = "";
+    onboardingGeminiInput.placeholder = localConfig.apiKeys?.hasGemini
+      ? "已本机保存，留空则不修改"
+      : "用户自备 Gemini Key，仅本机保存";
+  }
 
   const automationEnabled = $("onboarding-automation-enabled");
   if (automationEnabled) automationEnabled.checked = Boolean(desktopAutomation.enabled);
@@ -1302,6 +1713,7 @@ function setEnvironmentStatus(report) {
   const checks = [
     Boolean(inspect),
     Boolean(plan?.results?.image?.ready),
+    Boolean(plan?.results?.video?.ready),
     Boolean(plan?.results?.xiaohongshu?.ready),
     Boolean(plan?.results?.douyin?.ready)
   ];
@@ -1309,16 +1721,18 @@ function setEnvironmentStatus(report) {
 
   setStatusItem("env-config", inspect ? "已就绪" : "未就绪", Boolean(inspect));
   setStatusItem("env-image", plan?.results?.image?.ready ? "已就绪" : "未就绪", Boolean(plan?.results?.image?.ready));
+  setStatusItem("env-video", plan?.results?.video?.ready ? "已就绪" : "未就绪", Boolean(plan?.results?.video?.ready));
   setStatusItem("env-xhs", plan?.results?.xiaohongshu?.ready ? "已就绪" : "未就绪", Boolean(plan?.results?.xiaohongshu?.ready));
   setStatusItem("env-douyin", plan?.results?.douyin?.ready ? "已就绪" : "未就绪", Boolean(plan?.results?.douyin?.ready));
 
-  setText("env-summary", readyCount === 4 ? "全部执行条件已就绪" : `就绪 ${readyCount}/4`);
+  setText("env-summary", readyCount === 5 ? "全部执行条件已就绪" : `就绪 ${readyCount}/5`);
   setText("env-checked-at", formatDateTimeLabel(report?.checkedAt, nowLabel()));
 }
 
 function clearEnvironmentStatus() {
   setStatusItem("env-config", "未检查", null);
   setStatusItem("env-image", "未检查", null);
+  setStatusItem("env-video", "未检查", null);
   setStatusItem("env-xhs", "未检查", null);
   setStatusItem("env-douyin", "未检查", null);
   setText("env-summary", "尚未检查");
@@ -1429,6 +1843,60 @@ function applyDashboard(dashboard, environment = null) {
   setText("settings-image-path", safeString(dashboard.paths.imageDownloadsDir));
   setText("settings-python-bin", safeString(dashboard.localConfig?.runtime?.pythonBin || dashboard.dependencyReport?.recommendedConfig?.pythonBin));
   setText("settings-dependency-state", dashboard.dependencyReport?.ready ? "核心依赖已识别" : "仍需补齐依赖");
+  const imageProvider = dashboard.localConfig?.image?.provider || "dreamina";
+  setText("settings-image-provider", imageProvider === "nano_banana_pro" ? "Nano Banana Pro" : "Dreamina CLI");
+  setText("settings-gemini-key-state", dashboard.localConfig?.apiKeys?.hasGemini ? "已配置" : "未配置");
+  const videoPlan = dashboard.environmentReport?.plan?.results?.video || {};
+  const videoRefs =
+    videoPlan.reference_images ||
+    dashboard.mediaGeneration?.videoReferenceImages ||
+    dashboard.videoGallery?.item?.referenceImages ||
+    [];
+  const deviceRefs =
+    videoPlan.device_reference_images ||
+    dashboard.mediaGeneration?.videoDeviceReferenceImages ||
+    dashboard.videoGallery?.item?.deviceReferenceImages ||
+    [];
+  const selectedHair =
+    videoPlan.hair_color_reference_image ||
+    dashboard.mediaGeneration?.selectedHairColorImage ||
+    dashboard.videoGallery?.item?.hairColorReferenceImage ||
+    dashboard.localConfig?.video?.selectedHairColorImage ||
+    "";
+  setText(
+    "settings-video-reference-state",
+    videoRefs.length
+      ? `设备图 ${deviceRefs.length}/3 · 发色图 ${selectedHair ? "1/1" : "0/1"}`
+      : "将使用 3 张设备图 + 1 张发色图"
+  );
+  setValue("media-hair-color-dir", safeString(dashboard.localConfig?.video?.hairColorReferenceDir, ""));
+  setValue("media-video-downloads-dir", safeString(dashboard.localConfig?.video?.downloadsDir || dashboard.paths?.videoDownloadsDir, ""));
+  setValue("video-page-hair-color-image", safeString(dashboard.localConfig?.video?.selectedHairColorImage, ""));
+  setValue("media-nano-banana-model", safeString(dashboard.localConfig?.image?.nanoBananaModel, "gemini-3-pro-image-preview-high"));
+  setValue("onboarding-nano-banana-model", safeString(dashboard.localConfig?.image?.nanoBananaModel, "gemini-3-pro-image-preview-high"));
+  setValue("media-nano-banana-api-base", safeString(dashboard.localConfig?.image?.nanoBananaApiBase, ""));
+  setValue("onboarding-nano-banana-api-base", safeString(dashboard.localConfig?.image?.nanoBananaApiBase, ""));
+  const providerInput = $("media-image-provider");
+  if (providerInput) providerInput.value = imageProvider;
+  const geminiInput = $("media-gemini-api-key");
+  if (geminiInput) {
+    geminiInput.value = "";
+    geminiInput.placeholder = dashboard.localConfig?.apiKeys?.hasGemini
+      ? "已本机保存，留空则不修改"
+      : "用户自备 Key，仅本机保存";
+  }
+  const videoModelValue = safeString(dashboard.localConfig?.video?.modelVersion, "seedance2.0_vip");
+  const videoDurationValue = String(dashboard.localConfig?.video?.duration || 15);
+  const videoRatioValue = safeString(dashboard.localConfig?.video?.ratio, "16:9");
+  const videoResolutionValue = safeString(dashboard.localConfig?.video?.videoResolution, "720p");
+  setValue("media-video-model", videoModelValue);
+  setValue("video-page-model", videoModelValue);
+  setValue("media-video-duration", videoDurationValue);
+  setValue("video-page-duration", videoDurationValue);
+  setValue("media-video-ratio", videoRatioValue);
+  setValue("video-page-ratio", videoRatioValue);
+  setValue("media-video-resolution", videoResolutionValue);
+  setValue("video-page-resolution", videoResolutionValue);
   const desktopAutomation = dashboard.desktopAutomation || {};
   setText("automation-status-badge", desktopAutomation.enabled ? "已开启" : "未开启");
   setText("automation-enabled-state", desktopAutomation.enabled ? "开启" : "关闭");
@@ -1449,6 +1917,25 @@ function applyDashboard(dashboard, environment = null) {
   const automationTimeInput = $("automation-time-input");
   if (automationTimeInput) automationTimeInput.value = safeString(desktopAutomation.dailyTime, "09:00");
 
+  const videoAutomation = dashboard.videoAutomation || {};
+  setText("video-automation-status-badge", videoAutomation.enabled ? "已开启" : "未开启");
+  setText("video-automation-enabled-state", videoAutomation.enabled ? "开启" : "关闭");
+  setText("video-automation-daily-time", safeString(videoAutomation.dailyTime, "09:30"));
+  setText("video-automation-next-run", formatDateTimeLabel(videoAutomation.nextRunAt, "未安排"));
+  setText("video-automation-last-run", formatDateTimeLabel(videoAutomation.lastRunAt, "尚未执行"));
+  setText(
+    "video-automation-workflow-mode",
+    videoAutomation.workflowMode === "generate-then-publish-current-video"
+      ? "先生成当前视频，再发布到已启用平台"
+      : safeString(videoAutomation.workflowMode)
+  );
+  setText("video-automation-xhs-enabled", `${accountsSummary.xiaohongshu.enabled} 个`);
+  setText("video-automation-douyin-enabled", `${accountsSummary.douyin.enabled} 个`);
+  setText("video-automation-last-result", safeString(videoAutomation.lastResultSummary, "尚未执行"));
+  const videoAutomationEnabledInput = $("video-automation-enabled-input");
+  if (videoAutomationEnabledInput) videoAutomationEnabledInput.checked = Boolean(videoAutomation.enabled);
+  const videoAutomationTimeInput = $("video-automation-time-input");
+  if (videoAutomationTimeInput) videoAutomationTimeInput.value = safeString(videoAutomation.dailyTime, "09:30");
   const hotItems = (upstream.hotCandidates || []).slice(0, 3).map((item) => ({
     label: "热点",
     title: item.title || item.topic_name || "未命中强相关热点",
@@ -1483,7 +1970,15 @@ function applyDashboard(dashboard, environment = null) {
   }
   applyBriefView();
   state.selectedTemplates = normalizeSelectedTemplates(dashboard.templateSelection);
+  state.selectedVideoTemplateId = resolveVideoTemplateId(
+    dashboard.localConfig?.video?.templateId ||
+      dashboard.videoGallery?.item?.templateId ||
+      dashboard.environmentReport?.plan?.results?.video?.template_id ||
+      dashboard.videoTemplateCatalog?.defaultTemplateId
+  );
   renderTemplateSelection();
+  renderVideoTemplateSelection();
+  renderVideoGeneration();
   renderAccountsView();
   refreshMotionDelays(document);
   bindPointerSurfaces(document);
@@ -1590,8 +2085,18 @@ async function runAction(action, extra = {}) {
         deviceImageDir: $("onboarding-device-dir")?.value || "",
         downloadsDir: $("onboarding-downloads-dir")?.value || "",
         imageDir: $("onboarding-downloads-dir")?.value || "",
-        sauRoot: $("onboarding-sau-root")?.value || ""
+        videoHairColorReferenceDir: $("onboarding-hair-color-dir")?.value || "",
+        videoDownloadsDir: $("onboarding-video-downloads-dir")?.value || "",
+        sauRoot: $("onboarding-sau-root")?.value || "",
+        imageProvider: $("onboarding-image-provider")?.value || "dreamina",
+        nanoBananaModel: $("onboarding-nano-banana-model")?.value || "gemini-3-pro-image-preview-high",
+        nanoBananaApiBase: $("onboarding-nano-banana-api-base")?.value || ""
       };
+      const onboardingGeminiApiKey = $("onboarding-gemini-api-key")?.value || "";
+      if (onboardingGeminiApiKey) {
+        payload.geminiApiKey = onboardingGeminiApiKey;
+        payload.nanoBananaApiKey = onboardingGeminiApiKey;
+      }
       const result = await window.desktopApp.saveLocalConfig(payload);
       state.environmentReport = null;
       clearEnvironmentStatus();
@@ -1603,6 +2108,67 @@ async function runAction(action, extra = {}) {
         stepLabel: result?.ok ? "保存完成" : "保存失败"
       });
       logOutput(result?.ok ? `本地配置已保存到\n${result.path}` : "本地配置保存失败。");
+      await refreshDashboard(null);
+    } finally {
+      setButtonsBusy(false);
+    }
+    return;
+  }
+
+  if (action === "save-media-config") {
+    setButtonsBusy(true);
+    setActionStatus({ action, state: "running", progress: 0.22, indeterminate: true });
+    logOutput("保存媒体生成配置中…");
+    try {
+      const geminiApiKey = $("media-gemini-api-key")?.value || "";
+      const selectedVideoTemplateId = resolveVideoTemplateId(
+        state.selectedVideoTemplateId || state.dashboard?.localConfig?.video?.templateId
+      );
+      const payload = {
+        imageProvider: $("media-image-provider")?.value || "dreamina",
+        nanoBananaModel: $("media-nano-banana-model")?.value || state.dashboard?.localConfig?.image?.nanoBananaModel || "gemini-3-pro-image-preview-high",
+        nanoBananaApiBase: $("media-nano-banana-api-base")?.value || "",
+        videoTemplateId: selectedVideoTemplateId,
+        videoHairColorReferenceDir: $("media-hair-color-dir")?.value || "",
+        videoDownloadsDir: $("media-video-downloads-dir")?.value || "",
+        videoSelectedHairColorImage: $("video-page-hair-color-image")?.value || "",
+        videoModelVersion: mediaConfigInputValue("video-page-model", "media-video-model", "seedance2.0_vip"),
+        videoDuration: Number(mediaConfigInputValue("video-page-duration", "media-video-duration", 15)),
+        videoRatio: mediaConfigInputValue("video-page-ratio", "media-video-ratio", "16:9"),
+        videoResolution: mediaConfigInputValue("video-page-resolution", "media-video-resolution", "720p")
+      };
+      if (geminiApiKey) {
+        payload.geminiApiKey = geminiApiKey;
+        payload.nanoBananaApiKey = geminiApiKey;
+      }
+      const result = await window.desktopApp.saveLocalConfig(payload);
+      state.environmentReport = null;
+      clearEnvironmentStatus();
+      setActionStatus({
+        action,
+        state: result?.ok ? "success" : "error",
+        progress: result?.ok ? 1 : 0.92,
+        detail: result?.ok ? "媒体生成配置已保存到本机。" : "媒体生成配置保存失败。",
+        stepLabel: result?.ok ? "保存完成" : "保存失败"
+      });
+      logOutput(result?.ok ? `媒体生成配置已保存到本机 local.json\n${result.path}` : "媒体生成配置保存失败。");
+      await refreshDashboard(null);
+    } finally {
+      setButtonsBusy(false);
+    }
+    return;
+  }
+
+  if (action === "clear-video-hair-color") {
+    setButtonsBusy(true);
+    try {
+      setValue("video-page-hair-color-image", "");
+      const result = await window.desktopApp.saveLocalConfig({
+        videoSelectedHairColorImage: "",
+        videoHairColorReferenceDir: $("media-hair-color-dir")?.value || state.dashboard?.localConfig?.video?.hairColorReferenceDir || "",
+        videoDownloadsDir: $("media-video-downloads-dir")?.value || state.dashboard?.localConfig?.video?.downloadsDir || ""
+      });
+      logOutput(result?.ok ? "已切换为随机发色测试：下次生成会从发色图库随机选择 1 张。" : "随机发色设置保存失败。");
       await refreshDashboard(null);
     } finally {
       setButtonsBusy(false);
@@ -1738,6 +2304,21 @@ async function runAction(action, extra = {}) {
     return;
   }
 
+  if (action === "open-video") {
+    const videoPath = state.dashboard?.videoGallery?.item?.videoPath;
+    if (videoPath) {
+      await window.desktopApp.openPath(videoPath);
+      return;
+    }
+    logOutput("当前还没有可打开的视频。");
+    return;
+  }
+
+  if (action === "open-video-folder") {
+    await window.desktopApp.openPath(state.dashboard?.paths?.videoDownloadsDir || state.dashboard?.paths?.imageDownloadsDir);
+    return;
+  }
+
   if (action === "save-brief-draft") {
     setButtonsBusy(true);
     setActionStatus({ action, state: "running", progress: 0.32, stepLabel: "写入 brief 草稿" });
@@ -1779,6 +2360,7 @@ async function runAction(action, extra = {}) {
     logOutput("保存本地自动化设置中…");
     try {
       const payload = {
+        kind: "desktop",
         enabled: Boolean($("automation-enabled-input")?.checked),
         dailyTime: $("automation-time-input")?.value || "09:00"
       };
@@ -1791,6 +2373,32 @@ async function runAction(action, extra = {}) {
         stepLabel: result?.ok ? "保存完成" : "保存失败"
       });
       logOutput(result?.ok ? `自动化设置已保存到\n${result.path}` : "自动化设置保存失败。");
+      await refreshDashboard(state.environmentReport);
+    } finally {
+      setButtonsBusy(false);
+    }
+    return;
+  }
+
+  if (action === "save-video-automation") {
+    setButtonsBusy(true);
+    setActionStatus({ action, state: "running", progress: 0.24, stepLabel: "保存视频自动化" });
+    logOutput("正在保存视频自动化设置…");
+    try {
+      const payload = {
+        kind: "video",
+        enabled: Boolean($("video-automation-enabled-input")?.checked),
+        dailyTime: $("video-automation-time-input")?.value || "09:30"
+      };
+      const result = await window.desktopApp.saveAutomationSettings(payload);
+      setActionStatus({
+        action,
+        state: result?.ok ? "success" : "error",
+        progress: result?.ok ? 1 : 0.92,
+        detail: result?.ok ? "视频自动化设置已保存。" : "视频自动化设置保存失败。",
+        stepLabel: result?.ok ? "保存完成" : "保存失败"
+      });
+      logOutput(result?.ok ? `视频自动化设置已保存到\n${result.path}` : "视频自动化设置保存失败。");
       await refreshDashboard(state.environmentReport);
     } finally {
       setButtonsBusy(false);
@@ -1864,10 +2472,16 @@ async function runAction(action, extra = {}) {
     "refresh-upstream",
     "run-daily",
     "execute-image",
+    "execute-video",
+    "execute-video-regenerate",
+    "execute-video-xiaohongshu",
+    "execute-video-douyin",
+    "execute-video-publish",
     "execute-xiaohongshu",
     "execute-douyin",
     "execute-publish",
-    "run-desktop-automation"
+    "run-desktop-automation",
+    "run-video-automation"
   ]);
   if (!workflowActions.has(action)) return;
 
@@ -1878,7 +2492,7 @@ async function runAction(action, extra = {}) {
     const result = await window.desktopApp.runWorkflowAction({ action, product: "ransebao", date, ...extra });
     if (result?.background) {
       logOutput(result.stdout || "任务已提交，正在后台执行。");
-      if (action === "execute-image") {
+      if (action === "execute-image" || action === "execute-video" || action === "execute-video-regenerate") {
         await refreshDashboard(state.environmentReport);
       }
       return;
@@ -2052,6 +2666,25 @@ function bindNavigation() {
   });
 }
 
+function bindMirroredConfigControls() {
+  [
+    ["video-page-model", "media-video-model"],
+    ["video-page-duration", "media-video-duration"],
+    ["video-page-ratio", "media-video-ratio"],
+    ["video-page-resolution", "media-video-resolution"]
+  ].forEach(([videoId, settingsId]) => {
+    const videoControl = $(videoId);
+    const settingsControl = $(settingsId);
+    if (!videoControl || !settingsControl) return;
+    const sync = (source, target) => {
+      target.value = source.value;
+      if (videoId === "video-page-ratio") applyVideoPreviewRatio(source.value);
+    };
+    videoControl.addEventListener("change", () => sync(videoControl, settingsControl));
+    settingsControl.addEventListener("change", () => sync(settingsControl, videoControl));
+  });
+}
+
 function bindTemplateExperience() {
   const backdrop = $("template-modal-backdrop");
   const closeButton = $("template-modal-close");
@@ -2193,6 +2826,7 @@ function bindSidebarFloat() {
 
 async function bootstrap() {
   bindNavigation();
+  bindMirroredConfigControls();
   bindTemplateExperience();
   bindAccountExperience();
   bindOnboardingExperience();

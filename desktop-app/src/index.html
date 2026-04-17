@@ -37,6 +37,10 @@
               <span class="nav-icon">◌</span>
               <span>图片模板</span>
             </button>
+            <button class="nav-item" type="button" data-page="video">
+              <span class="nav-icon">◒</span>
+              <span>视频生成</span>
+            </button>
             <button class="nav-item" type="button" data-page="publish">
               <span class="nav-icon">◍</span>
               <span>发布确认</span>
@@ -279,7 +283,220 @@
 
                   <div class="overview-actions top-gap">
                     <button class="secondary-action compact" type="button" data-action="execute-image">生成 3 张图片</button>
+                    <button class="secondary-action compact" type="button" data-page-jump="video">进入视频生成</button>
                     <button class="secondary-action compact" type="button" data-page-jump="publish">进入发布确认</button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="page-view" data-view="video">
+              <div class="page-grid two-col">
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">视频生成</p>
+                      <h2>用设备参考图生成本地短视频</h2>
+                    </div>
+                    <div class="mini-badge" id="video-status-badge">未生成</div>
+                  </div>
+
+                  <div class="panel-head compact-head top-gap">
+                    <div>
+                      <p class="section-label">视频模板选择</p>
+                      <h3>当前视频模板</h3>
+                    </div>
+                    <div class="mini-badge" id="video-template-selection-label">1 个模板</div>
+                  </div>
+
+                  <div class="video-template-grid" id="video-template-grid"></div>
+
+                  <div class="settings-list">
+                    <div class="settings-row">
+                      <span>生成状态</span>
+                      <strong id="video-state-label">尚未生成</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>视频模板</span>
+                      <strong id="video-template-label">高颜值染后爆点变美视频</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>参考图</span>
+                      <strong id="video-reference-label">将使用 3 张设备图 + 1 张发色图</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>当前发色</span>
+                      <strong id="video-hair-color-label">等待选择发色图</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>生成参数</span>
+                      <strong id="video-model-label">seedance2.0_vip · 15s · 16:9 · 720p</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>视频输出</span>
+                      <strong id="video-output-dir-label">等待配置</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>本地路径</span>
+                      <strong id="video-path-label">尚未生成</strong>
+                    </div>
+                  </div>
+
+                  <div class="settings-list top-gap">
+                    <label class="settings-row" for="video-page-model">
+                      <span>视频模型</span>
+                      <select id="video-page-model">
+                        <option value="seedance2.0fast">Seedance 2.0 Fast</option>
+                        <option value="seedance2.0">Seedance 2.0</option>
+                        <option value="seedance2.0fast_vip">Seedance 2.0 Fast VIP</option>
+                        <option value="seedance2.0_vip">Seedance 2.0 VIP</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" for="video-page-duration">
+                      <span>视频时长</span>
+                      <select id="video-page-duration">
+                        <option value="4">4 秒</option>
+                        <option value="5">5 秒</option>
+                        <option value="6">6 秒</option>
+                        <option value="8">8 秒</option>
+                        <option value="10">10 秒</option>
+                        <option value="15">15 秒</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" for="video-page-ratio">
+                      <span>视频比例</span>
+                      <select id="video-page-ratio">
+                        <option value="9:16">9:16</option>
+                        <option value="16:9">16:9</option>
+                        <option value="1:1">1:1</option>
+                        <option value="3:4">3:4</option>
+                        <option value="4:3">4:3</option>
+                        <option value="21:9">21:9</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" for="video-page-resolution">
+                      <span>视频清晰度</span>
+                      <select id="video-page-resolution">
+                        <option value="720p">720p</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" for="video-page-hair-color-image">
+                      <span>测试发色图</span>
+                      <div class="path-input-row">
+                        <input id="video-page-hair-color-image" type="text" placeholder="留空则从发色图库随机选择" />
+                        <button class="secondary-action compact path-picker-button" type="button" data-pick-path="video-page-hair-color-image" data-pick-kind="file" data-pick-title="选择发色参考图">选择</button>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div class="overview-actions top-gap">
+                    <button class="secondary-action compact" type="button" data-action="save-media-config">保存视频参数</button>
+                    <button class="secondary-action compact" type="button" data-action="clear-video-hair-color">随机发色测试</button>
+                  </div>
+
+                  <div class="panel-head compact-head top-gap">
+                    <div>
+                      <p class="section-label">视频发布文案</p>
+                      <h3>模板发布预览</h3>
+                    </div>
+                  </div>
+
+                  <div class="content-summary">
+                    <div class="content-preview-block">
+                      <span>抖音视频文案</span>
+                      <p id="video-douyin-body">尚未生成当前视频模板的抖音文案。</p>
+                    </div>
+                    <div class="content-preview-block">
+                      <span>小红书视频文案</span>
+                      <p id="video-xhs-body">尚未生成当前视频模板的小红书文案。</p>
+                    </div>
+                  </div>
+
+                  <div class="panel-head compact-head top-gap">
+                    <div>
+                      <p class="section-label">视频发布状态</p>
+                      <h3>当前视频发布就绪情况</h3>
+                    </div>
+                  </div>
+
+                  <div class="publish-checks">
+                    <div>
+                      <span>视频文件</span>
+                      <strong id="video-publish-file-status">未就绪</strong>
+                    </div>
+                    <div>
+                      <span>小红书视频</span>
+                      <strong id="video-publish-xhs-status">未发布</strong>
+                    </div>
+                    <div>
+                      <span>抖音视频</span>
+                      <strong id="video-publish-douyin-status">未发布</strong>
+                    </div>
+                  </div>
+
+                  <div class="content-preview-block top-gap">
+                    <span>视频发布反馈</span>
+                    <p id="video-publish-error">当前还没有视频发布错误。</p>
+                  </div>
+
+                  <div class="quick-grid top-gap">
+                    <button class="quick-action" type="button" data-action="execute-video">
+                      <strong>生成视频</strong>
+                      <span>只生成并下载本地 mp4，不进入发布链。</span>
+                    </button>
+                    <button class="quick-action" type="button" data-action="execute-video-regenerate">
+                      <strong>重新生成视频</strong>
+                      <span>如果对刚才的结果不满意，就按当前模板和参数重新生成一条。</span>
+                    </button>
+                    <button class="quick-action" type="button" data-action="open-video">
+                      <strong>打开视频</strong>
+                      <span>查看最近一次成功生成的视频文件。</span>
+                    </button>
+                    <button class="quick-action" type="button" data-action="open-video-folder">
+                      <strong>打开目录</strong>
+                      <span>定位视频和图片输出所在文件夹。</span>
+                    </button>
+                    <button class="quick-action" type="button" data-page-jump="settings">
+                      <strong>调整参数</strong>
+                      <span>在运行与设置里修改模型、比例和清晰度。</span>
+                    </button>
+                  </div>
+
+                  <div class="quick-grid top-gap">
+                    <button class="quick-action" type="button" data-action="execute-video-xiaohongshu">
+                      <strong>发布到小红书</strong>
+                      <span>使用当前视频和模板文案，只走小红书视频发布。</span>
+                    </button>
+                    <button class="quick-action" type="button" data-action="execute-video-douyin">
+                      <strong>发布到抖音</strong>
+                      <span>使用当前视频和模板文案，只走抖音视频发布。</span>
+                    </button>
+                    <button class="quick-action" type="button" data-action="execute-video-publish">
+                      <strong>双平台发布</strong>
+                      <span>按账号启用状态，把同一个视频发到两个平台。</span>
+                    </button>
+                  </div>
+                </article>
+
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">视频结果</p>
+                      <h2>本地 mp4 预览</h2>
+                    </div>
+                    <button class="text-button" type="button" data-action="open-video">打开视频</button>
+                  </div>
+
+                  <div class="template-result-card">
+                    <div class="template-result-head">
+                      <div>
+                        <span>生成预览</span>
+                        <strong>Dreamina 全能参考</strong>
+                      </div>
+                    </div>
+                    <div class="template-result-preview-frame" id="video-preview-frame">
+                      <div class="template-result-placeholder">视频生成完成后会显示在这里</div>
+                    </div>
                   </div>
                 </article>
               </div>
@@ -463,6 +680,10 @@
                       <span>Dreamina</span>
                       <strong id="env-image">未检查</strong>
                     </div>
+                    <div class="env-status-item" id="env-video-item">
+                      <span>视频生成</span>
+                      <strong id="env-video">未检查</strong>
+                    </div>
                     <div class="env-status-item" id="env-xhs-item">
                       <span>小红书</span>
                       <strong id="env-xhs">未检查</strong>
@@ -571,6 +792,170 @@
                       <span>依赖识别</span>
                       <strong id="settings-dependency-state">尚未识别</strong>
                     </div>
+                  </div>
+
+                  <div class="panel-head top-gap">
+                    <div>
+                      <p class="section-label">视频自动化</p>
+                      <h2>定时视频工作流</h2>
+                    </div>
+                    <div class="mini-badge" id="video-automation-status-badge">未开启</div>
+                  </div>
+
+                  <div class="settings-list">
+                    <div class="settings-row">
+                      <span>自动化开关</span>
+                      <strong id="video-automation-enabled-state">关闭</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>每日执行时间</span>
+                      <strong id="video-automation-daily-time">09:30</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>下次执行</span>
+                      <strong id="video-automation-next-run">-</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>上次执行</span>
+                      <strong id="video-automation-last-run">-</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>工作流策略</span>
+                      <strong id="video-automation-workflow-mode">先生成当前视频，再发布到已启用平台</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>已启用小红书账号</span>
+                      <strong id="video-automation-xhs-enabled">0</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>已启用抖音账号</span>
+                      <strong id="video-automation-douyin-enabled">0</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>最近结果</span>
+                      <strong id="video-automation-last-result">尚未执行</strong>
+                    </div>
+                  </div>
+
+                  <div class="automation-controls">
+                    <label class="toggle-row" for="video-automation-enabled-input">
+                      <span>客户端保持开启时，每天自动生成当前视频并继续发布</span>
+                      <input id="video-automation-enabled-input" type="checkbox" />
+                    </label>
+                    <label class="time-row" for="video-automation-time-input">
+                      <span>执行时间</span>
+                      <input id="video-automation-time-input" type="time" value="09:30" />
+                    </label>
+                  </div>
+
+                  <div class="overview-actions top-gap">
+                    <button class="secondary-action compact" type="button" data-action="save-video-automation">保存视频自动化</button>
+                    <button class="secondary-action compact" type="button" data-action="run-video-automation">立即执行一次</button>
+                  </div>
+
+                  <div class="panel-head top-gap">
+                    <div>
+                      <p class="section-label">媒体生成</p>
+                      <h2>个人本地版 API 配置</h2>
+                    </div>
+                  </div>
+                  <p class="settings-helper">
+                    当前采用 BYOK 模式：用户自备 API Key，只保存在本机 local.json，不上传服务器，也不由染色宝托管额度。
+                  </p>
+
+                  <div class="settings-list">
+                    <div class="settings-row">
+                      <span>当前生图模型</span>
+                      <strong id="settings-image-provider">Dreamina CLI</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>Nano Banana API Key（自备）</span>
+                      <strong id="settings-gemini-key-state">未配置</strong>
+                    </div>
+                    <div class="settings-row">
+                      <span>视频参考图</span>
+                      <strong id="settings-video-reference-state">等待检测</strong>
+                    </div>
+                  </div>
+
+                  <div class="settings-list">
+                    <label class="settings-row" for="media-image-provider">
+                      <span>图片生成 Provider</span>
+                      <select id="media-image-provider">
+                        <option value="dreamina">Dreamina CLI</option>
+                        <option value="nano_banana_pro">Nano Banana Pro</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" for="media-gemini-api-key">
+                      <span>Nano Banana API Key（用户自备）</span>
+                      <input id="media-gemini-api-key" type="password" placeholder="仅本机保存，不上传服务器" />
+                    </label>
+                    <label class="settings-row" for="media-nano-banana-model">
+                      <span>Nano Banana 模型</span>
+                      <select id="media-nano-banana-model">
+                        <option value="gemini-3-pro-image-preview">Nano Banana Pro 标准版</option>
+                        <option value="gemini-3-pro-image-preview-high">Nano Banana Pro 稳定增强版</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" for="media-nano-banana-api-base">
+                      <span>Nano Banana API 地址</span>
+                      <input id="media-nano-banana-api-base" type="text" placeholder="https://generativelanguage.googleapis.com/v1beta 或镜像地址" />
+                    </label>
+                    <label class="settings-row" for="media-hair-color-dir">
+                      <span>发色图库目录</span>
+                      <div class="path-input-row">
+                        <input id="media-hair-color-dir" type="text" placeholder="/path/to/hair-color-images" />
+                        <button class="secondary-action compact path-picker-button" type="button" data-pick-path="media-hair-color-dir" data-pick-kind="directory" data-pick-title="选择发色图库目录">选择</button>
+                      </div>
+                    </label>
+                    <label class="settings-row" for="media-video-downloads-dir">
+                      <span>视频输出目录</span>
+                      <div class="path-input-row">
+                        <input id="media-video-downloads-dir" type="text" placeholder="默认桌面/输出视频" />
+                        <button class="secondary-action compact path-picker-button" type="button" data-pick-path="media-video-downloads-dir" data-pick-kind="directory" data-pick-title="选择视频输出目录">选择</button>
+                      </div>
+                    </label>
+                    <label class="settings-row" for="media-video-model">
+                      <span>视频模型</span>
+                      <select id="media-video-model">
+                        <option value="seedance2.0fast">Seedance 2.0 Fast</option>
+                        <option value="seedance2.0">Seedance 2.0</option>
+                        <option value="seedance2.0fast_vip">Seedance 2.0 Fast VIP</option>
+                        <option value="seedance2.0_vip">Seedance 2.0 VIP</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" for="media-video-duration">
+                      <span>视频时长</span>
+                      <select id="media-video-duration">
+                        <option value="4">4 秒</option>
+                        <option value="5">5 秒</option>
+                        <option value="6">6 秒</option>
+                        <option value="8">8 秒</option>
+                        <option value="10">10 秒</option>
+                        <option value="15">15 秒</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" for="media-video-ratio">
+                      <span>视频比例</span>
+                      <select id="media-video-ratio">
+                        <option value="9:16">9:16</option>
+                        <option value="16:9">16:9</option>
+                        <option value="1:1">1:1</option>
+                        <option value="3:4">3:4</option>
+                        <option value="4:3">4:3</option>
+                        <option value="21:9">21:9</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" for="media-video-resolution">
+                      <span>视频清晰度</span>
+                      <select id="media-video-resolution">
+                        <option value="720p">720p</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="overview-actions top-gap">
+                    <button class="secondary-action compact" type="button" data-action="save-media-config">保存媒体配置</button>
                   </div>
 
                   <pre id="command-log" class="log-block report-log">等待操作…</pre>
@@ -750,6 +1135,17 @@
 
               <div class="onboarding-path-row">
                 <div class="onboarding-path-label">
+                  <label for="onboarding-hair-color-dir">发色图库目录</label>
+                  <small>自动化视频会从这里随机选择 1 张发色参考图</small>
+                </div>
+                <div class="path-input-row">
+                  <input id="onboarding-hair-color-dir" type="text" placeholder="/path/to/hair-color-images" />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="onboarding-hair-color-dir" data-pick-kind="directory" data-pick-title="选择发色图库目录">选择</button>
+                </div>
+              </div>
+
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
                   <label for="onboarding-downloads-dir">生成图片目录</label>
                   <small>Dreamina 下载结果和发布读取都从这里走</small>
                 </div>
@@ -761,12 +1157,65 @@
 
               <div class="onboarding-path-row">
                 <div class="onboarding-path-label">
+                  <label for="onboarding-video-downloads-dir">视频输出目录</label>
+                  <small>视频 mp4 会单独下载到这里，默认建议桌面“输出视频”</small>
+                </div>
+                <div class="path-input-row">
+                  <input id="onboarding-video-downloads-dir" type="text" placeholder="/path/to/video-output" />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="onboarding-video-downloads-dir" data-pick-kind="directory" data-pick-title="选择视频输出目录">选择</button>
+                </div>
+              </div>
+
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
                   <label for="onboarding-sau-root">发布工具根目录</label>
                   <small>小红书和抖音登录、检测、发布都依赖它</small>
                 </div>
                 <div class="path-input-row">
                   <input id="onboarding-sau-root" type="text" placeholder="/path/to/social-auto-upload" />
                   <button class="secondary-action compact path-picker-button" type="button" data-pick-path="onboarding-sau-root" data-pick-kind="directory" data-pick-title="选择发布工具根目录">选择</button>
+                </div>
+              </div>
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
+                  <label for="onboarding-image-provider">生图方式</label>
+                  <small>默认用 Dreamina；要用 Nano Banana Pro 时可填写官方或镜像 API 地址</small>
+                </div>
+                <div class="path-input-row">
+                  <select id="onboarding-image-provider">
+                    <option value="dreamina">Dreamina CLI</option>
+                    <option value="nano_banana_pro">Nano Banana Pro</option>
+                  </select>
+                </div>
+              </div>
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
+                  <label for="onboarding-gemini-api-key">Nano Banana Pro API Key</label>
+                  <small>用户自备 Key，只保存在本机 local.json</small>
+                </div>
+                <div class="path-input-row">
+                  <input id="onboarding-gemini-api-key" type="password" placeholder="可稍后再填，留空不修改已有 Key" />
+                </div>
+              </div>
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
+                  <label for="onboarding-nano-banana-model">Nano Banana 模型</label>
+                  <small>可选标准版或稳定增强版，后者通常更稳但速度可能略慢</small>
+                </div>
+                <div class="path-input-row">
+                  <select id="onboarding-nano-banana-model">
+                    <option value="gemini-3-pro-image-preview">Nano Banana Pro 标准版</option>
+                    <option value="gemini-3-pro-image-preview-high">Nano Banana Pro 稳定增强版</option>
+                  </select>
+                </div>
+              </div>
+              <div class="onboarding-path-row">
+                <div class="onboarding-path-label">
+                  <label for="onboarding-nano-banana-api-base">Nano Banana API 地址</label>
+                  <small>可填写官方 Gemini 地址，或第三方兼容镜像地址</small>
+                </div>
+                <div class="path-input-row">
+                  <input id="onboarding-nano-banana-api-base" type="text" placeholder="https://generativelanguage.googleapis.com/v1beta" />
                 </div>
               </div>
             </div>

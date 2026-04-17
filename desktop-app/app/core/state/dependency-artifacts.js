@@ -1,8 +1,17 @@
 function isLocalConfigReady(configSummary, configuredString) {
   return Boolean(
     configuredString(configSummary?.image?.deviceImageDir) &&
-    configuredString(configSummary?.image?.downloadsDir)
+    configuredString(configSummary?.image?.downloadsDir) &&
+    configuredString(configSummary?.video?.hairColorReferenceDir) &&
+    configuredString(configSummary?.video?.downloadsDir)
   );
+}
+
+function hasPublishCapability(planResult) {
+  const root = String(planResult?.cwd || planResult?.root || "").trim();
+  const sauBin = String(planResult?.sau_bin || "").trim();
+  const accounts = Array.isArray(planResult?.accounts) ? planResult.accounts : [];
+  return Boolean(root && sauBin && accounts.length > 0);
 }
 
 function isEnvironmentReady(report) {
@@ -10,14 +19,18 @@ function isEnvironmentReady(report) {
   return Boolean(
     report?.inspect &&
     results?.image?.ready &&
-    results?.xiaohongshu?.ready &&
-    results?.douyin?.ready
+    results?.video?.ready &&
+    hasPublishCapability(results?.xiaohongshu) &&
+    hasPublishCapability(results?.douyin) &&
+    hasPublishCapability(results?.video_xiaohongshu) &&
+    hasPublishCapability(results?.video_douyin)
   );
 }
 
 function createDependencyStateCore(deps) {
   function summarizeLocalRuntimeConfig(localConfig = deps.readLocalRuntimeConfig()) {
     const imageCfg = localConfig?.image || {};
+    const videoCfg = localConfig?.video || {};
     const publishCfg = localConfig?.publish || {};
     const sauRoot = deps.resolveSauRoot(localConfig);
     return {
@@ -27,12 +40,33 @@ function createDependencyStateCore(deps) {
       runtime: {
         pythonBin: deps.configuredString(localConfig?.runtime?.python_bin)
       },
+      apiKeys: {
+        hasGemini: Boolean(deps.configuredString(localConfig?.api_keys?.gemini || localConfig?.api_keys?.nano_banana_pro))
+      },
       image: {
+        provider: deps.configuredString(imageCfg?.provider || "dreamina"),
+        nanoBananaModel: deps.configuredString(imageCfg?.nano_banana_model || "gemini-3-pro-image-preview"),
+        nanoBananaApiBase: deps.configuredString(imageCfg?.nano_banana_api_base),
+        nanoBananaAuthMode: deps.configuredString(imageCfg?.nano_banana_auth_mode || "auto"),
         dreaminaCliRoot: deps.configuredString(imageCfg?.dreamina_cli_root),
         deviceImageDir: deps.configuredString(imageCfg?.device_image_dir),
         downloadsDir: deps.configuredString(imageCfg?.downloads_dir),
         pollAttempts: Number(imageCfg?.poll_attempts || 8),
         pollIntervalSeconds: Number(imageCfg?.poll_interval_seconds || 15)
+      },
+      video: {
+        dreaminaCliRoot: deps.configuredString(videoCfg?.dreamina_cli_root || imageCfg?.dreamina_cli_root),
+        referenceImageDir: deps.configuredString(videoCfg?.reference_image_dir || imageCfg?.device_image_dir),
+        hairColorReferenceDir: deps.configuredString(videoCfg?.hair_color_reference_dir),
+        selectedHairColorImage: deps.configuredString(videoCfg?.selected_hair_color_image),
+        downloadsDir: deps.configuredString(videoCfg?.downloads_dir),
+        templateId: deps.configuredString(videoCfg?.template_id || "beauty-hair-transformation"),
+        modelVersion: deps.configuredString(videoCfg?.model_version || "seedance2.0_vip"),
+        duration: Number(videoCfg?.duration || 15),
+        ratio: deps.configuredString(videoCfg?.ratio || "16:9"),
+        videoResolution: deps.configuredString(videoCfg?.video_resolution || "720p"),
+        pollAttempts: Number(videoCfg?.poll_attempts || 12),
+        pollIntervalSeconds: Number(videoCfg?.poll_interval_seconds || 15)
       },
       publish: {
         imageDir: deps.configuredString(publishCfg?.image_dir),

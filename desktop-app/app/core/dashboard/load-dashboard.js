@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 
 function deriveUpstreamState(hotPool, router, brandPool, briefs) {
   const routerItems = Array.isArray(router?.items) ? router.items : [];
@@ -17,6 +18,143 @@ function deriveUpstreamState(hotPool, router, brandPool, briefs) {
   };
 }
 
+function existingFilePath(value = "") {
+  const candidate = String(value || "").trim();
+  if (!candidate) return null;
+  try {
+    return fs.statSync(candidate).isFile() ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
+function collectReferenceImages(imageDir, limit = 4) {
+  const root = String(imageDir || "").trim();
+  if (!root) return [];
+  try {
+    const allowed = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+    return fs.readdirSync(root)
+      .sort()
+      .map((name) => path.join(root, name))
+      .filter((candidate) => {
+        try {
+          return fs.statSync(candidate).isFile() && allowed.has(path.extname(candidate).toLowerCase());
+        } catch {
+          return false;
+        }
+      })
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+function existingImagePath(value = "") {
+  const candidate = existingFilePath(value);
+  if (!candidate) return null;
+  return [".png", ".jpg", ".jpeg", ".webp"].includes(path.extname(candidate).toLowerCase()) ? candidate : null;
+}
+
+function loadVideoTemplateCatalog(productStudioRoot) {
+  const catalogPath = path.join(productStudioRoot, "products", "ransebao", "assets", "video-templates", "catalog.json");
+  try {
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+    const root = path.dirname(catalogPath);
+    const templates = Array.isArray(catalog?.templates) ? catalog.templates : [];
+    return {
+      defaultTemplateId: String(catalog?.default_template || templates[0]?.id || "beauty-hair-transformation"),
+      templates: templates.map((template) => {
+        const templateVideoPath = existingFilePath(path.join(root, String(template?.template_video || "")));
+        return {
+          id: String(template?.id || ""),
+          name: String(template?.name || template?.id || ""),
+          description: String(template?.description || ""),
+          templateVideoPath,
+          modelVersion: String(template?.model_version || "seedance2.0_vip"),
+          duration: Number(template?.duration || 15),
+          ratio: String(template?.ratio || "16:9"),
+          videoResolution: String(template?.video_resolution || "720p")
+        };
+      }).filter((template) => template.id)
+    };
+  } catch {
+    return {
+      defaultTemplateId: "beauty-hair-transformation",
+      templates: []
+    };
+  }
+}
+
+function normalizeVideoGallery(gallery, generationState, localConfigSummary) {
+  const item = gallery?.item || {};
+  const videoPath = existingFilePath(item.videoPath || generationState?.videoPath);
+  const status = item.status || generationState?.status || "pending";
+  return {
+    date: gallery?.date || generationState?.date || null,
+    status: videoPath && status === "completed" ? "completed" : status,
+    updatedAt: gallery?.updatedAt || generationState?.updatedAt || null,
+    item: {
+      status: videoPath ? "completed" : status,
+      videoPath,
+      generatedAt: item.generatedAt || generationState?.generatedAt || null,
+      submitId: item.submitId || generationState?.submitId || null,
+      promptPath: item.promptPath || generationState?.promptPath || null,
+      error: item.error || generationState?.error || null,
+      provider: item.provider || generationState?.provider || "dreamina-multimodal2video",
+      templateId: item.templateId || generationState?.templateId || null,
+      templateName: item.templateName || generationState?.templateName || null,
+      templateVideoPath: existingFilePath(item.templateVideoPath || generationState?.templateVideoPath),
+      referenceVideos: item.referenceVideos || generationState?.referenceVideos || [],
+      deviceReferenceImages: item.deviceReferenceImages || generationState?.deviceReferenceImages || [],
+      hairColorReferenceImage: existingImagePath(item.hairColorReferenceImage || generationState?.hairColorReferenceImage),
+      hairColorName: item.hairColorName || generationState?.hairColorName || null,
+      douyinNoteText: item.douyinNoteText || generationState?.douyinNoteText || null,
+      douyinNotePath: existingFilePath(item.douyinNotePath || generationState?.douyinNotePath),
+      xiaohongshuBody: item.xiaohongshuBody || generationState?.xiaohongshuBody || null,
+      xiaohongshuBodyPath: existingFilePath(item.xiaohongshuBodyPath || generationState?.xiaohongshuBodyPath),
+      videoOutputDir: item.videoOutputDir || generationState?.videoOutputDir || localConfigSummary?.video?.downloadsDir || null,
+      modelVersion: item.modelVersion || localConfigSummary?.video?.modelVersion || "seedance2.0_vip",
+      duration: item.duration || localConfigSummary?.video?.duration || 15,
+      ratio: item.ratio || localConfigSummary?.video?.ratio || "16:9",
+      videoResolution: item.videoResolution || localConfigSummary?.video?.videoResolution || "720p",
+      referenceImages: item.referenceImages || generationState?.referenceImages || []
+    }
+  };
+}
+
+function normalizeVideoPublishPlatformState(platformState, videoItem) {
+  const source = platformState && typeof platformState === "object" ? platformState : {};
+  return {
+    status: String(source.status || "idle"),
+    updatedAt: source.updatedAt || null,
+    error: source.error || null,
+    title: source.title || null,
+    desc: source.desc || null,
+    tags: source.tags || null,
+    file: existingFilePath(source.file || source.videoPath || videoItem?.videoPath),
+    accountResults: Array.isArray(source.accountResults) ? source.accountResults : [],
+    successCount: Number(source.successCount || 0),
+    accountCount: Number(source.accountCount || 0),
+  };
+}
+
+function normalizeVideoPublishState(state, videoGallery) {
+  const payload = state && typeof state === "object" ? state : {};
+  const videoItem = videoGallery?.item || {};
+  return {
+    date: payload.date || videoGallery?.date || null,
+    updatedAt: payload.updatedAt || null,
+    videoPath: existingFilePath(payload.videoPath || videoItem.videoPath),
+    templateId: payload.templateId || videoItem.templateId || null,
+    templateName: payload.templateName || videoItem.templateName || null,
+    hairColorName: payload.hairColorName || videoItem.hairColorName || null,
+    platforms: {
+      xiaohongshu: normalizeVideoPublishPlatformState(payload.platforms?.xiaohongshu, videoItem),
+      douyin: normalizeVideoPublishPlatformState(payload.platforms?.douyin, videoItem),
+    },
+  };
+}
+
 function createDashboardLoader(deps) {
   return async function loadDashboard() {
     const date = deps.formatDate();
@@ -26,12 +164,23 @@ function createDashboardLoader(deps) {
     const dependencyReport = await deps.inspectDependencyReport(deps.readLocalRuntimeConfig());
     deps.writeJsonSafe(artifacts.dependencyReport, dependencyReport);
     const templateCatalog = deps.loadTemplateCatalog();
+    const videoTemplateCatalog = loadVideoTemplateCatalog(deps.productStudioRoot);
     const bestBrief = deps.readJsonSafe(artifacts.bestBrief);
     const brandPool = deps.readJsonSafe(artifacts.brandPool);
     const briefs = deps.readJsonSafe(artifacts.briefs);
     const hotPool = deps.readJsonSafe(artifacts.hotPool);
     const prompt = deps.readJsonSafe(artifacts.prompt);
     const execution = deps.readJsonSafe(artifacts.execution);
+    const videoGenerationState = deps.readJsonSafe(artifacts.videoGenerationState);
+    const videoGallery = normalizeVideoGallery(
+      deps.readJsonSafe(artifacts.videoGallery),
+      videoGenerationState,
+      localConfigSummary
+    );
+    const videoPublishState = normalizeVideoPublishState(
+      deps.readJsonSafe(artifacts.videoPublishState),
+      videoGallery
+    );
     const upstreamRouter = deps.readJsonSafe(artifacts.upstreamRouter);
     const briefDraft = deps.readJsonSafe(artifacts.briefDraft);
     const activeBrief = deps.readResolvedActiveBrief(date);
@@ -46,6 +195,7 @@ function createDashboardLoader(deps) {
     const publishImages = deps.collectPublishImages(templateGallery);
     const latestImage = publishImages[0] || null;
     const desktopAutomation = deps.readDesktopAutomationSettings();
+    const videoAutomation = deps.readVideoAutomationSettings();
     const accountsState = deps.readPublishAccountsState();
     const environmentReport = deps.readJsonSafe(artifacts.environmentReport);
     const onboarding = deps.deriveOnboardingState({
@@ -55,10 +205,19 @@ function createDashboardLoader(deps) {
       accountsState,
       desktopAutomation
     });
+    const userHome = process.env.USERPROFILE || process.env.HOME || "";
     const imageDownloadsDir =
       localConfigSummary.image.downloadsDir ||
       localConfigSummary.publish.imageDir ||
-      path.join(process.env.HOME || "", "Desktop", "jimeng-downloads");
+      path.join(userHome, "Desktop", "输出图片");
+    const videoDeviceReferenceImages = collectReferenceImages(localConfigSummary.image.deviceImageDir, 3);
+    const videoHairColorImages = collectReferenceImages(localConfigSummary.video.hairColorReferenceDir, 200);
+    const selectedHairColorImage = existingImagePath(localConfigSummary.video.selectedHairColorImage);
+    const previewHairColorImage = selectedHairColorImage || videoHairColorImages[0] || null;
+    const videoReferenceImages = [
+      ...videoDeviceReferenceImages,
+      ...(previewHairColorImage ? [previewHairColorImage] : [])
+    ];
 
     return {
       meta: {
@@ -82,13 +241,24 @@ function createDashboardLoader(deps) {
       briefs,
       prompt,
       execution,
+      videoGenerationState,
+      videoGallery,
+      videoPublishState,
       briefDraft,
       templateCatalog,
+      videoTemplateCatalog,
       templateSelection,
       templateGallery,
       publishImages,
       desktopAutomation,
+      videoAutomation,
       accounts: accountsState,
+      mediaGeneration: {
+        videoReferenceImages,
+        videoDeviceReferenceImages,
+        videoHairColorImages,
+        selectedHairColorImage
+      },
       localConfig: localConfigSummary,
       dependencyReport,
       dependencyInstallState: deps.readDependencyInstallState(),
@@ -105,7 +275,8 @@ function createDashboardLoader(deps) {
         runtimeRoot: deps.runtimeRoot,
         runtimeConfigDir: deps.runtimeConfigDir,
         outputsDir: path.join(deps.runtimeRoot, "outputs"),
-        imageDownloadsDir
+        imageDownloadsDir,
+        videoDownloadsDir: localConfigSummary.video.downloadsDir || path.join(userHome, "Desktop", "输出视频")
       }
     };
   };

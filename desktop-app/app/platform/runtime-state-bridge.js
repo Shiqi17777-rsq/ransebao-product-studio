@@ -1,6 +1,7 @@
 function createRuntimeStateBridge() {
   let activeAutomationRun = null;
   let activeImageTask = null;
+  let activeVideoTask = null;
 
   return {
     getActiveAutomationRun() {
@@ -14,6 +15,12 @@ function createRuntimeStateBridge() {
     },
     setActiveImageTask(nextState) {
       activeImageTask = nextState;
+    },
+    getActiveVideoTask() {
+      return activeVideoTask;
+    },
+    setActiveVideoTask(nextState) {
+      activeVideoTask = nextState;
     }
   };
 }

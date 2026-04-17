@@ -104,6 +104,7 @@ def plan_generation(prompt_env: dict[str, Any], local_config: dict[str, Any]) ->
 
     return {
         "adapter": "dreamina-cli",
+        "executor": "dreamina-image-cli",
         "ready": bool((official_bin or legacy_root) and reference_images and downloads_dir),
         "cli_root": legacy_root or "",
         "cli_bin": official_bin or "",

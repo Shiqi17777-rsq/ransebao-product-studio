@@ -43,3 +43,4 @@
 - `../runtime-state-bridge.js`
   - `activeAutomationRun`
   - `activeImageTask`
+  - `activeVideoTask`
