@@ -806,6 +806,46 @@ function createWorkflowOrchestrator(deps) {
     };
     const templateCatalog = deps.loadTemplateCatalog();
 
+    if (action === "refresh-news") {
+      deps.emitWorkflowProgress({
+        action,
+        state: "running",
+        title: "正在刷新资讯",
+        detail: "只更新热点资讯池，不重跑 brief 和后续链路。",
+        progress: 0.12,
+        currentStep: 1,
+        totalSteps: 1,
+        stepLabel: "刷新热点资讯池"
+      });
+
+      const result = await deps.runCli("refresh-news", normalized);
+      if (!result.ok) {
+        deps.emitWorkflowProgress({
+          action,
+          state: "error",
+          title: "资讯刷新失败",
+          detail: "热点资讯池刷新失败，请检查下方日志。",
+          progress: 0.92,
+          currentStep: 1,
+          totalSteps: 1,
+          stepLabel: "刷新失败"
+        });
+        return { ok: false, action, steps: [{ command: "refresh-news", label: "refresh-news", ...result }] };
+      }
+
+      deps.emitWorkflowProgress({
+        action,
+        state: "success",
+        title: "资讯已刷新",
+        detail: "热点资讯池已经更新，不会影响当前 brief 和已选模板。",
+        progress: 1,
+        currentStep: 1,
+        totalSteps: 1,
+        stepLabel: "刷新完成"
+      });
+      return { ok: true, action, steps: [{ command: "refresh-news", label: "refresh-news", ...result }] };
+    }
+
     if (action === "refresh-upstream") {
       const commands = buildUpstreamCommands();
       const steps = [];

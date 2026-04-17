@@ -76,6 +76,12 @@ const ACTION_META = {
     detail: "读取产品配置并检查图片、发布适配器。",
     stepLabel: "检查执行条件"
   },
+  "refresh-news": {
+    label: "资讯刷新",
+    title: "正在刷新资讯",
+    detail: "只更新热点资讯池，不重跑 brief 和后续链路。",
+    stepLabel: "刷新热点资讯池"
+  },
   "refresh-upstream": {
     label: "上游刷新",
     title: "正在刷新上游",
@@ -1996,6 +2002,9 @@ async function refreshDashboard(environment = null) {
 
 async function runAction(action, extra = {}) {
   const date = state.dashboard?.meta?.date;
+  const resolvedAction = action === "refresh-upstream" && state.currentPage === "upstream"
+    ? "refresh-news"
+    : action;
 
   if (action === "check-environment") {
     setButtonsBusy(true);
@@ -2392,7 +2401,7 @@ async function runAction(action, extra = {}) {
       };
       const result = await window.desktopApp.saveAutomationSettings(payload);
       setActionStatus({
-        action,
+        action: resolvedAction,
         state: result?.ok ? "success" : "error",
         progress: result?.ok ? 1 : 0.92,
         detail: result?.ok ? "视频自动化设置已保存。" : "视频自动化设置保存失败。",
@@ -2469,6 +2478,7 @@ async function runAction(action, extra = {}) {
   }
 
   const workflowActions = new Set([
+    "refresh-news",
     "refresh-upstream",
     "run-daily",
     "execute-image",
@@ -2483,16 +2493,16 @@ async function runAction(action, extra = {}) {
     "run-desktop-automation",
     "run-video-automation"
   ]);
-  if (!workflowActions.has(action)) return;
+  if (!workflowActions.has(resolvedAction)) return;
 
   setButtonsBusy(true);
-  setActionStatus({ action, state: "running", progress: 0.08, indeterminate: true });
+  setActionStatus({ action: resolvedAction, state: "running", progress: 0.08, indeterminate: true });
   logOutput("运行中…");
   try {
-    const result = await window.desktopApp.runWorkflowAction({ action, product: "ransebao", date, ...extra });
+    const result = await window.desktopApp.runWorkflowAction({ action: resolvedAction, product: "ransebao", date, ...extra });
     if (result?.background) {
       logOutput(result.stdout || "任务已提交，正在后台执行。");
-      if (action === "execute-image" || action === "execute-video" || action === "execute-video-regenerate") {
+      if (resolvedAction === "execute-image" || resolvedAction === "execute-video" || resolvedAction === "execute-video-regenerate") {
         await refreshDashboard(state.environmentReport);
       }
       return;

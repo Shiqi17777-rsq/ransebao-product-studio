@@ -4,7 +4,10 @@
   "fetch_defaults": {
     "days": 7,
     "per_source_limit": 15,
-    "user_agent": "Mozilla/5.0 (compatible; ProductStudioNewsPool/1.0)"
+    "user_agent": "Mozilla/5.0 (compatible; ProductStudioNewsPool/1.0)",
+    "request_attempts": 1,
+    "request_timeout_seconds": 6,
+    "max_parallel_sources": 8
   },
   "thresholds": {
     "hot": 70,
@@ -28,29 +31,34 @@
   ],
   "sources": [
     {
-      "id": "hair-industry-trends",
-      "kind": "google_news_search",
-      "query": "美发行业 OR 美业趋势"
+      "id": "domestic-sina-finance",
+      "kind": "rss_url",
+      "name": "新浪财经滚动",
+      "url": "https://rss.sina.com.cn/roll/finance/hot_roll.xml"
     },
     {
-      "id": "hair-color-demand",
-      "kind": "google_news_search",
-      "query": "染发 OR 白发遮盖 OR 染发需求"
+      "id": "domestic-sina-headlines",
+      "kind": "rss_url",
+      "name": "新浪新闻要闻",
+      "url": "https://rss.sina.com.cn/news/marquee/ddt.xml"
     },
     {
-      "id": "salon-operations",
-      "kind": "google_news_search",
-      "query": "门店经营 OR 理发店经营 OR 降本增效"
+      "id": "domestic-36kr",
+      "kind": "rss_url",
+      "name": "36氪",
+      "url": "https://www.36kr.com/feed"
     },
     {
-      "id": "beauty-ai",
-      "kind": "google_news_search",
-      "query": "AI 美业 OR 智能美业 OR 智能染发"
+      "id": "domestic-ifanr",
+      "kind": "rss_url",
+      "name": "爱范儿",
+      "url": "https://www.ifanr.com/feed"
     },
     {
-      "id": "beauty-franchise",
-      "kind": "google_news_search",
-      "query": "美业招商 OR 美发加盟 OR 门店合作"
+      "id": "domestic-sspai",
+      "kind": "rss_url",
+      "name": "少数派",
+      "url": "https://sspai.com/feed"
     }
   ],
   "keyword_groups": {
