@@ -58,54 +58,56 @@ def plan_publish(
     title = prompt_env["publish"]["title"]
     topics = _derive_topics(prompt_env)
     tags = ",".join(topics)
+    can_plan_commands = bool(root and len(images) >= 3 and title and body)
 
     account_plans: list[dict[str, Any]] = []
-    for account in accounts:
-        argv = [
-            sau_bin,
-            "xiaohongshu",
-            "upload-note",
-            "--account",
-            account["accountName"],
-            "--images",
-            *images,
-            "--title",
-            title,
-            "--note",
-            body,
-        ]
-        if tags:
-            argv.extend(["--tags", tags])
-        if private_publish:
-            argv.append("--private")
-        argv.append("--headed" if headed else "--headless")
+    if can_plan_commands:
+        for account in accounts:
+            argv = [
+                sau_bin,
+                "xiaohongshu",
+                "upload-note",
+                "--account",
+                account["accountName"],
+                "--images",
+                *images,
+                "--title",
+                title,
+                "--note",
+                body,
+            ]
+            if tags:
+                argv.extend(["--tags", tags])
+            if private_publish:
+                argv.append("--private")
+            argv.append("--headed" if headed else "--headless")
 
-        command = (
-            f"cd {root} && "
-            f"{sau_bin} xiaohongshu upload-note --account '{account['accountName']}' --images "
-            + " ".join(f"'{image_path}'" for image_path in images)
-            + f" --title '{title}' --note '{body}'"
-        )
-        if tags:
-            command += f" --tags '{tags}'"
-        if private_publish:
-            command += " --private"
-        command += f" {'--headed' if headed else '--headless'}"
+            command = (
+                f"cd {root} && "
+                f"{sau_bin} xiaohongshu upload-note --account '{account['accountName']}' --images "
+                + " ".join(f"'{image_path}'" for image_path in images)
+                + f" --title '{title}' --note '{body}'"
+            )
+            if tags:
+                command += f" --tags '{tags}'"
+            if private_publish:
+                command += " --private"
+            command += f" {'--headed' if headed else '--headless'}"
 
-        account_plans.append(
-            {
-                "accountName": account["accountName"],
-                "displayName": account["displayName"],
-                "argv": argv,
-                "env": sau_env,
-                "planned_command": command,
-            }
-        )
+            account_plans.append(
+                {
+                    "accountName": account["accountName"],
+                    "displayName": account["displayName"],
+                    "argv": argv,
+                    "env": sau_env,
+                    "planned_command": command,
+                }
+            )
 
     return {
         "adapter": "xiaohongshu-sau",
         "platform": "xiaohongshu",
-        "ready": bool(root and len(images) >= 3 and account_plans),
+        "ready": bool(can_plan_commands and account_plans),
         "root": root,
         "cwd": root or None,
         "sau_bin": sau_bin,

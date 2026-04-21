@@ -306,7 +306,10 @@
                       <p class="section-label">视频模板选择</p>
                       <h3>当前视频模板</h3>
                     </div>
-                    <div class="mini-badge" id="video-template-selection-label">1 个模板</div>
+                    <div class="modal-head-actions">
+                      <button class="secondary-action compact" type="button" id="video-template-import-open">导入本地模板</button>
+                      <div class="mini-badge" id="video-template-selection-label">1 个模板</div>
+                    </div>
                   </div>
 
                   <div class="video-template-grid" id="video-template-grid"></div>
@@ -439,6 +442,36 @@
                     <p id="video-publish-error">当前还没有视频发布错误。</p>
                   </div>
 
+                  <div class="publish-visibility-panel top-gap">
+                    <div class="publish-visibility-head">
+                      <div>
+                        <span>发布可见性</span>
+                        <strong>视频发布本次设置</strong>
+                      </div>
+                      <small data-publish-visibility-dirty>自动化使用已保存默认</small>
+                    </div>
+                    <div class="publish-visibility-grid">
+                      <div class="publish-visibility-row">
+                        <span>小红书</span>
+                        <div class="segmented-control" role="group" aria-label="小红书视频发布可见性">
+                          <button type="button" data-publish-visibility-platform="xiaohongshu" data-publish-visibility-value="private">私密</button>
+                          <button type="button" data-publish-visibility-platform="xiaohongshu" data-publish-visibility-value="public">公开</button>
+                        </div>
+                      </div>
+                      <div class="publish-visibility-row">
+                        <span>抖音</span>
+                        <div class="segmented-control" role="group" aria-label="抖音视频发布可见性">
+                          <button type="button" data-publish-visibility-platform="douyin" data-publish-visibility-value="private">私密</button>
+                          <button type="button" data-publish-visibility-platform="douyin" data-publish-visibility-value="public">公开</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="publish-visibility-footer">
+                      <span>当前：小红书 <strong data-publish-visibility-label="xiaohongshu">私密</strong> · 抖音 <strong data-publish-visibility-label="douyin">私密</strong></span>
+                      <button class="secondary-action compact" type="button" data-action="save-publish-visibility">保存默认</button>
+                    </div>
+                  </div>
+
                   <div class="quick-grid top-gap">
                     <button class="quick-action" type="button" data-action="execute-video">
                       <strong>生成视频</strong>
@@ -549,6 +582,36 @@
                     <div class="settings-row">
                       <span>发布图片</span>
                       <strong id="latest-image-path">-</strong>
+                    </div>
+                  </div>
+
+                  <div class="publish-visibility-panel top-gap">
+                    <div class="publish-visibility-head">
+                      <div>
+                        <span>发布可见性</span>
+                        <strong>图文发布本次设置</strong>
+                      </div>
+                      <small data-publish-visibility-dirty>自动化使用已保存默认</small>
+                    </div>
+                    <div class="publish-visibility-grid">
+                      <div class="publish-visibility-row">
+                        <span>小红书</span>
+                        <div class="segmented-control" role="group" aria-label="小红书图文发布可见性">
+                          <button type="button" data-publish-visibility-platform="xiaohongshu" data-publish-visibility-value="private">私密</button>
+                          <button type="button" data-publish-visibility-platform="xiaohongshu" data-publish-visibility-value="public">公开</button>
+                        </div>
+                      </div>
+                      <div class="publish-visibility-row">
+                        <span>抖音</span>
+                        <div class="segmented-control" role="group" aria-label="抖音图文发布可见性">
+                          <button type="button" data-publish-visibility-platform="douyin" data-publish-visibility-value="private">私密</button>
+                          <button type="button" data-publish-visibility-platform="douyin" data-publish-visibility-value="public">公开</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="publish-visibility-footer">
+                      <span>当前：小红书 <strong data-publish-visibility-label="xiaohongshu">私密</strong> · 抖音 <strong data-publish-visibility-label="douyin">私密</strong></span>
+                      <button class="secondary-action compact" type="button" data-action="save-publish-visibility">保存默认</button>
                     </div>
                   </div>
 
@@ -980,10 +1043,168 @@
             <p class="section-label">选择图片模板</p>
             <h2 id="template-modal-title">为模板槽位选择样式</h2>
           </div>
-          <button class="text-button" type="button" id="template-modal-close">关闭</button>
+          <div class="modal-head-actions">
+            <button class="secondary-action compact" type="button" id="image-template-import-open">导入本地模板</button>
+            <button class="text-button" type="button" id="template-modal-close">关闭</button>
+          </div>
         </div>
         <p class="template-modal-copy" id="template-modal-copy">已被其他槽位占用的模板不能重复选择。</p>
         <div class="template-modal-grid" id="template-modal-grid"></div>
+      </div>
+    </div>
+
+    <div class="template-modal-backdrop image-template-import-backdrop" id="image-template-import-backdrop" hidden>
+      <div class="template-modal-panel image-template-import-panel glass-surface">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">本地图片模板</p>
+            <h2>导入提示词模板和预览图</h2>
+          </div>
+          <button class="text-button" type="button" id="image-template-import-close">关闭</button>
+        </div>
+        <form class="image-template-import-form" id="image-template-import-form">
+          <div class="image-template-import-layout">
+            <div class="settings-list">
+              <label class="settings-row" for="image-template-name">
+                <span>模板名称</span>
+                <div class="path-input-row">
+                  <input id="image-template-name" type="text" placeholder="例如：节日活动海报" required />
+                </div>
+              </label>
+              <label class="settings-row" for="image-template-description">
+                <span>模板说明</span>
+                <div class="path-input-row">
+                  <input id="image-template-description" type="text" placeholder="用于区分这套模板的构图或风格" />
+                </div>
+              </label>
+              <label class="settings-row" for="image-template-prompt-path">
+                <span>提示词文件</span>
+                <div class="path-input-row">
+                  <input id="image-template-prompt-path" type="text" placeholder="选择 .txt 或 .md 文件" required />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="image-template-prompt-path" data-pick-kind="file" data-pick-title="选择提示词模板" data-pick-extensions="txt,md">选择</button>
+                </div>
+              </label>
+              <label class="settings-row" for="image-template-preview-path">
+                <span>预览图片</span>
+                <div class="path-input-row">
+                  <input id="image-template-preview-path" type="text" placeholder="选择 .png / .jpg / .webp 图片" required />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="image-template-preview-path" data-pick-kind="file" data-pick-title="选择模板预览图" data-pick-extensions="png,jpg,jpeg,webp">选择</button>
+                </div>
+              </label>
+            </div>
+            <div class="image-template-import-preview">
+              <img id="image-template-import-preview-image" alt="模板预览图" hidden />
+              <span id="image-template-import-preview-empty">预览图会显示在这里</span>
+            </div>
+          </div>
+          <div class="overview-actions top-gap">
+            <button class="secondary-action compact" type="button" id="image-template-import-cancel">取消</button>
+            <button class="secondary-action compact" type="submit" id="image-template-import-submit">导入并选用</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="template-modal-backdrop image-template-import-backdrop" id="video-template-import-backdrop" hidden>
+      <div class="template-modal-panel image-template-import-panel glass-surface">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">本地视频模板</p>
+            <h2>导入提示词模板和示例视频</h2>
+          </div>
+          <button class="text-button" type="button" id="video-template-import-close">关闭</button>
+        </div>
+        <form class="image-template-import-form" id="video-template-import-form">
+          <div class="image-template-import-layout">
+            <div class="settings-list">
+              <label class="settings-row" for="video-template-name">
+                <span>模板名称</span>
+                <div class="path-input-row">
+                  <input id="video-template-name" type="text" placeholder="例如：门店竖屏发色展示" required />
+                </div>
+              </label>
+              <label class="settings-row" for="video-template-description">
+                <span>模板说明</span>
+                <div class="path-input-row">
+                  <input id="video-template-description" type="text" placeholder="用于区分这套模板的节奏或画面风格" />
+                </div>
+              </label>
+              <label class="settings-row" for="video-template-prompt-path">
+                <span>视频提示词</span>
+                <div class="path-input-row">
+                  <input id="video-template-prompt-path" type="text" placeholder="选择 .txt 或 .md 文件" required />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="video-template-prompt-path" data-pick-kind="file" data-pick-title="选择视频提示词模板" data-pick-extensions="txt,md">选择</button>
+                </div>
+              </label>
+              <label class="settings-row" for="video-template-video-path">
+                <span>示例视频</span>
+                <div class="path-input-row">
+                  <input id="video-template-video-path" type="text" placeholder="选择 .mp4 视频" required />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="video-template-video-path" data-pick-kind="file" data-pick-title="选择模板示例视频" data-pick-extensions="mp4">选择</button>
+                </div>
+              </label>
+              <label class="settings-row" for="video-template-douyin-path">
+                <span>抖音文案</span>
+                <div class="path-input-row">
+                  <input id="video-template-douyin-path" type="text" placeholder="可选 .txt 或 .md 文件" />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="video-template-douyin-path" data-pick-kind="file" data-pick-title="选择抖音视频文案模板" data-pick-extensions="txt,md">选择</button>
+                </div>
+              </label>
+              <label class="settings-row" for="video-template-xhs-path">
+                <span>小红书文案</span>
+                <div class="path-input-row">
+                  <input id="video-template-xhs-path" type="text" placeholder="可选 .txt 或 .md 文件" />
+                  <button class="secondary-action compact path-picker-button" type="button" data-pick-path="video-template-xhs-path" data-pick-kind="file" data-pick-title="选择小红书视频文案模板" data-pick-extensions="txt,md">选择</button>
+                </div>
+              </label>
+              <label class="settings-row" for="video-template-model">
+                <span>默认模型</span>
+                <select id="video-template-model">
+                  <option value="seedance2.0fast">Seedance 2.0 Fast</option>
+                  <option value="seedance2.0">Seedance 2.0</option>
+                  <option value="seedance2.0fast_vip">Seedance 2.0 Fast VIP</option>
+                  <option value="seedance2.0_vip" selected>Seedance 2.0 VIP</option>
+                </select>
+              </label>
+              <label class="settings-row" for="video-template-duration">
+                <span>默认时长</span>
+                <select id="video-template-duration">
+                  <option value="4">4 秒</option>
+                  <option value="5">5 秒</option>
+                  <option value="6">6 秒</option>
+                  <option value="8">8 秒</option>
+                  <option value="10">10 秒</option>
+                  <option value="15" selected>15 秒</option>
+                </select>
+              </label>
+              <label class="settings-row" for="video-template-ratio">
+                <span>默认比例</span>
+                <select id="video-template-ratio">
+                  <option value="9:16">9:16</option>
+                  <option value="16:9" selected>16:9</option>
+                  <option value="1:1">1:1</option>
+                  <option value="3:4">3:4</option>
+                  <option value="4:3">4:3</option>
+                  <option value="21:9">21:9</option>
+                </select>
+              </label>
+              <label class="settings-row" for="video-template-resolution">
+                <span>默认清晰度</span>
+                <select id="video-template-resolution">
+                  <option value="720p" selected>720p</option>
+                </select>
+              </label>
+            </div>
+            <div class="image-template-import-preview video-template-import-preview">
+              <video id="video-template-import-preview-video" muted loop playsinline controls hidden></video>
+              <span id="video-template-import-preview-empty">示例视频会显示在这里，仅用于模板卡片预览</span>
+            </div>
+          </div>
+          <div class="overview-actions top-gap">
+            <button class="secondary-action compact" type="button" id="video-template-import-cancel">取消</button>
+            <button class="secondary-action compact" type="submit" id="video-template-import-submit">导入并选用</button>
+          </div>
+        </form>
       </div>
     </div>
 

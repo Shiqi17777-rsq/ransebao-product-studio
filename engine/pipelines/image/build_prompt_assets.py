@@ -191,6 +191,91 @@ def load_template_selection(paths: AppPaths, product_id: str) -> dict[str, Any]:
     return load_json(selection_path)
 
 
+def configured_string(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def resolve_imported_template_file(template_dir: Path, value: Any, fallback_name: str) -> Path | None:
+    candidates = [
+        Path(configured_string(value)).expanduser() if configured_string(value) else None,
+        template_dir / fallback_name,
+    ]
+    for candidate in candidates:
+        if candidate and candidate.is_file():
+            return candidate
+    return None
+
+
+def load_runtime_image_templates(paths: AppPaths, product_id: str) -> dict[str, dict[str, Any]]:
+    root = paths.runtime_product_dir(product_id) / "assets" / "image-templates"
+    if not root.is_dir():
+        return {}
+    templates: dict[str, dict[str, Any]] = {}
+    allowed_preview_suffixes = {".png", ".jpg", ".jpeg", ".webp"}
+    for template_json in sorted(root.glob("*/template.json")):
+        try:
+            payload = load_json(template_json)
+        except Exception:
+            continue
+        template_dir = template_json.parent
+        template_id = configured_string(payload.get("id") or template_dir.name)
+        if not template_id or not template_id.startswith("local-"):
+            continue
+        prompt_path = resolve_imported_template_file(
+            template_dir,
+            payload.get("promptTemplatePath") or payload.get("prompt_template_path"),
+            "prompt_template.txt",
+        )
+        preview_path = None
+        for preview_name in ("preview.png", "preview.jpg", "preview.jpeg", "preview.webp"):
+            preview_path = resolve_imported_template_file(
+                template_dir,
+                payload.get("previewImagePath") or payload.get("preview_image_path"),
+                preview_name,
+            )
+            if preview_path:
+                break
+        if not prompt_path or not preview_path or preview_path.suffix.lower() not in allowed_preview_suffixes:
+            continue
+        prompt_text = prompt_path.read_text(encoding="utf-8").strip()
+        if not prompt_text:
+            continue
+        description = configured_string(payload.get("description"))
+        visual_modifiers = payload.get("visualModifiers")
+        if not isinstance(visual_modifiers, list):
+            visual_modifiers = payload.get("visual_modifiers")
+        if not isinstance(visual_modifiers, list):
+            visual_modifiers = []
+        templates[template_id] = {
+            "source": "local_import",
+            "name": configured_string(payload.get("name")) or template_id,
+            "description": description,
+            "layout_focus": configured_string(payload.get("layoutFocus") or payload.get("layout_focus") or description)
+            or "Use the imported local image template as the layout and style direction.",
+            "prompt_style": configured_string(payload.get("promptStyle") or payload.get("prompt_style"))
+            or "Merge the imported local prompt with the current brief-driven poster prompt.",
+            "visual_modifiers": visual_modifiers,
+            "prompt_template_path": str(prompt_path),
+            "prompt_template_text": prompt_text,
+            "preview_image_path": str(preview_path),
+            "prompt_mode": configured_string(payload.get("promptMode") or payload.get("prompt_mode")) or "merge",
+            "reference_image_mode": configured_string(
+                payload.get("referenceImageMode") or payload.get("reference_image_mode")
+            ) or "preview_only",
+        }
+    return templates
+
+
+def load_image_prompt_config(paths: AppPaths, product_id: str) -> dict[str, Any]:
+    config = load_json(paths.product_dir(product_id) / "prompts" / "image_prompt_defaults.json")
+    templates = dict(config.get("templates", {}))
+    templates.update(load_runtime_image_templates(paths, product_id))
+    return {
+        **config,
+        "templates": templates,
+    }
+
+
 def resolve_template(
     config: dict[str, Any],
     selection: dict[str, Any],
@@ -530,6 +615,28 @@ def build_prompt_text(
 """
 
 
+def merge_imported_template_prompt(prompt_text: str, template: dict[str, Any]) -> str:
+    if template.get("source") != "local_import":
+        return prompt_text
+    imported_prompt = configured_string(template.get("prompt_template_text"))
+    if not imported_prompt:
+        prompt_path = configured_string(template.get("prompt_template_path"))
+        if prompt_path:
+            candidate = Path(prompt_path).expanduser()
+            if candidate.is_file():
+                imported_prompt = candidate.read_text(encoding="utf-8").strip()
+    if not imported_prompt:
+        return prompt_text
+    return "\n\n".join(
+        [
+            prompt_text.strip(),
+            "【本地导入模板补充提示词】",
+            imported_prompt,
+            "【本地导入模板说明】导入图片仅用于模板卡片预览，不作为生图参考图上传。",
+        ]
+    )
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -588,7 +695,7 @@ def run(
     slot: int | None = None,
 ) -> dict[str, Any]:
     target_date = date_str or today_str()
-    config = load_json(paths.product_dir(product_id) / "prompts" / "image_prompt_defaults.json")
+    config = load_image_prompt_config(paths, product_id)
     best = load_json(paths.runtime_product_state_dir(product_id) / "current_best_brief.json")
     active_brief, active_brief_source = load_active_brief(paths, product_id, target_date)
     brief = active_brief or best["winner"]["brief"]
@@ -608,6 +715,7 @@ def run(
     xhs_hashtags = base_hashtags + ["#小红书运营"]
     douyin_hashtags = base_hashtags + ["#抖音运营"]
     prompt_text = build_prompt_text(brief, config, template_id, template, main_title, sub_title, sell_points, poster_copy)
+    prompt_text = merge_imported_template_prompt(prompt_text, template)
     xhs_body = derive_xhs_body(brief, xhs_hashtags)
     douyin_note_text = derive_douyin_note(brief, douyin_hashtags)
 
@@ -634,10 +742,15 @@ def run(
         },
         "template": {
             "id": template_id,
+            "source": template.get("source", "built_in"),
             "name": template.get("name", template_id),
             "description": template.get("description", ""),
             "layout_focus": template.get("layout_focus", ""),
             "prompt_style": template.get("prompt_style", ""),
+            "prompt_template_path": template.get("prompt_template_path"),
+            "preview_image_path": template.get("preview_image_path"),
+            "prompt_mode": template.get("prompt_mode"),
+            "reference_image_mode": template.get("reference_image_mode"),
         },
         "main_title": main_title,
         "sub_title": sub_title,

@@ -64,10 +64,21 @@ function registerCoreIpcHandlers(deps) {
     const type = String(payload?.type || "directory");
     const title = String(payload?.title || "选择路径");
     const defaultPath = configuredString(payload?.defaultPath);
+    const filters = Array.isArray(payload?.filters)
+      ? payload.filters
+          .map((filter) => ({
+            name: String(filter?.name || "Files"),
+            extensions: Array.isArray(filter?.extensions)
+              ? filter.extensions.map((extension) => String(extension).replace(/^\./, "")).filter(Boolean)
+              : []
+          }))
+          .filter((filter) => filter.extensions.length)
+      : undefined;
     const options = {
       title,
       defaultPath: defaultPath || undefined,
-      properties: type === "file" ? ["openFile"] : ["openDirectory", "createDirectory"]
+      properties: type === "file" ? ["openFile"] : ["openDirectory", "createDirectory"],
+      filters
     };
     const result = await dialog.showOpenDialog(activeWindow() || undefined, options);
     if (result.canceled || !result.filePaths?.length) {

@@ -9,7 +9,9 @@ const state = {
   activePreviewImage: null,
   accountModal: null,
   onboardingDismissed: false,
-  onboardingManual: false
+  onboardingManual: false,
+  publishVisibilityDraft: null,
+  publishVisibilityDraftDirty: false
 };
 
 const PAGE_META = {
@@ -111,6 +113,12 @@ const ACTION_META = {
     title: "正在重新生成视频",
     detail: "会按当前模板、参考图和参数重新跑一轮视频生成。",
     stepLabel: "重新生成视频"
+  },
+  "import-video-template": {
+    label: "视频模板",
+    title: "正在导入本地视频模板",
+    detail: "会复制本地提示词和模板示例视频到客户端运行目录。",
+    stepLabel: "导入视频模板"
   },
   "execute-video-xiaohongshu": {
     label: "视频发布",
@@ -226,6 +234,12 @@ const ACTION_META = {
     detail: "把图片 provider、用户自备 Gemini API Key 和视频默认参数写入本地配置。",
     stepLabel: "保存媒体配置"
   },
+  "save-publish-visibility": {
+    label: "发布确认",
+    title: "正在保存发布可见性",
+    detail: "把当前小红书和抖音的可见性选择写入本地默认配置。",
+    stepLabel: "保存发布默认"
+  },
   "inspect-dependencies": {
     label: "首次启动向导",
     title: "正在识别本机依赖",
@@ -290,6 +304,7 @@ const MOTION_SELECTORS = [
   ".env-status-list > *",
   ".settings-list > *",
   ".content-summary > *",
+  ".publish-visibility-panel",
   ".publish-checks > *",
   ".asset-meta > div"
 ];
@@ -311,6 +326,7 @@ const POINTER_SURFACE_SELECTORS = [
   ".content-preview-block",
   ".content-status-row",
   ".asset-meta > div",
+  ".publish-visibility-panel",
   ".settings-row",
   ".quick-action",
   ".account-card",
@@ -346,6 +362,83 @@ function mediaConfigInputValue(videoId, settingsId, fallback = "") {
   return firstInputValue(ids, fallback);
 }
 
+const PUBLISH_VISIBILITY_PLATFORMS = ["xiaohongshu", "douyin"];
+
+const PUBLISH_VISIBILITY_ACTION_PLATFORMS = {
+  "execute-publish": ["xiaohongshu", "douyin"],
+  "execute-xiaohongshu": ["xiaohongshu"],
+  "execute-douyin": ["douyin"],
+  "execute-video-publish": ["xiaohongshu", "douyin"],
+  "execute-video-xiaohongshu": ["xiaohongshu"],
+  "execute-video-douyin": ["douyin"]
+};
+
+function savedPublishPrivate(platform) {
+  return state.dashboard?.localConfig?.publish?.[platform]?.private !== false;
+}
+
+function syncPublishVisibilityDraftFromConfig({ force = false } = {}) {
+  if (!force && state.publishVisibilityDraftDirty && state.publishVisibilityDraft) return;
+  state.publishVisibilityDraft = {
+    xiaohongshu: savedPublishPrivate("xiaohongshu"),
+    douyin: savedPublishPrivate("douyin")
+  };
+  state.publishVisibilityDraftDirty = false;
+}
+
+function ensurePublishVisibilityDraft() {
+  if (!state.publishVisibilityDraft) syncPublishVisibilityDraftFromConfig({ force: true });
+  return state.publishVisibilityDraft || { xiaohongshu: true, douyin: true };
+}
+
+function publishVisibilityLabel(isPrivate) {
+  return isPrivate ? "私密" : "公开";
+}
+
+function publishVisibilityPayloadForAction(action) {
+  const platforms = PUBLISH_VISIBILITY_ACTION_PLATFORMS[action] || [];
+  const draft = ensurePublishVisibilityDraft();
+  const payload = {};
+  if (platforms.includes("xiaohongshu")) {
+    payload.publishXiaohongshuPrivate = draft.xiaohongshu !== false;
+  }
+  if (platforms.includes("douyin")) {
+    payload.publishDouyinPrivate = draft.douyin !== false;
+  }
+  return payload;
+}
+
+function renderPublishVisibilityControls() {
+  const draft = ensurePublishVisibilityDraft();
+  PUBLISH_VISIBILITY_PLATFORMS.forEach((platform) => {
+    const isPrivate = draft[platform] !== false;
+    const selectedValue = isPrivate ? "private" : "public";
+    document.querySelectorAll(`[data-publish-visibility-platform="${platform}"]`).forEach((button) => {
+      const selected = button.dataset.publishVisibilityValue === selectedValue;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+    document.querySelectorAll(`[data-publish-visibility-label="${platform}"]`).forEach((target) => {
+      target.textContent = publishVisibilityLabel(isPrivate);
+    });
+  });
+  document.querySelectorAll("[data-publish-visibility-dirty]").forEach((target) => {
+    target.textContent = state.publishVisibilityDraftDirty
+      ? "本次已调整，保存后自动化会使用"
+      : "自动化使用已保存默认";
+  });
+}
+
+function setPublishVisibilityDraft(platform, isPrivate) {
+  if (!PUBLISH_VISIBILITY_PLATFORMS.includes(platform)) return;
+  state.publishVisibilityDraft = {
+    ...ensurePublishVisibilityDraft(),
+    [platform]: isPrivate
+  };
+  state.publishVisibilityDraftDirty = true;
+  renderPublishVisibilityControls();
+}
+
 function fileNameFromPath(value = "") {
   const normalized = String(value || "").replace(/\\/g, "/");
   return normalized.split("/").filter(Boolean).pop() || "";
@@ -362,6 +455,16 @@ function firstNonEmptyArray(...values) {
 function safeString(value, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
+}
+
+function escapeHtml(value = "") {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
 }
 
 function translateRouteMode(mode) {
@@ -523,7 +626,7 @@ function handleDependencyProgress(payload) {
 }
 
 function setButtonsBusy(busy) {
-  document.querySelectorAll("[data-action], [data-account-open], [data-account-relogin], [data-account-check], [data-account-toggle], [data-account-remove], [data-pick-path], #account-modal-submit").forEach((button) => {
+  document.querySelectorAll("[data-action], [data-account-open], [data-account-relogin], [data-account-check], [data-account-toggle], [data-account-remove], [data-pick-path], [data-publish-visibility-platform], #account-modal-submit, #image-template-import-open, #image-template-import-submit, #video-template-import-open, #video-template-import-submit").forEach((button) => {
     if (busy) {
       button.classList.add("button-busy");
       button.disabled = true;
@@ -727,7 +830,7 @@ function renderTemplatePreview(meta) {
   if (imagePath) {
     return `
       <span class="template-preview is-${meta.id} has-image">
-        <img src="${localPathToAssetUrl(imagePath)}" alt="${meta.name}" class="template-preview-image" />
+        <img src="${localPathToAssetUrl(imagePath)}" alt="${escapeHtml(meta.name)}" class="template-preview-image" />
       </span>
     `;
   }
@@ -823,8 +926,8 @@ function renderTemplateSelection() {
           <div class="template-slot-body">
             ${renderTemplatePreview(meta)}
             <div class="template-slot-copy">
-              <strong>${meta.name}</strong>
-              <small>${meta.description || "已选模板"}</small>
+              <strong>${escapeHtml(meta.name)}</strong>
+              <small>${escapeHtml(meta.description || "已选模板")}</small>
             </div>
           </div>
         </article>
@@ -858,7 +961,7 @@ function renderTemplateResults() {
         <div class="template-result-head">
           <div>
             <p class="section-label">模板 ${item.slot}</p>
-            <strong>${item.templateName}</strong>
+            <strong>${escapeHtml(item.templateName)}</strong>
           </div>
           <div class="mini-badge ${item.status === "running" ? "is-running" : ""} ${item.status === "error" ? "is-error" : ""}">
             ${templateStatusLabel(item.status)}
@@ -868,7 +971,7 @@ function renderTemplateResults() {
         <div class="template-result-preview-frame">
           ${
             item.imagePath
-              ? `<img src="${localPathToAssetUrl(item.imagePath)}" alt="${item.templateName}" class="template-result-image" data-image-preview="${encodeURIComponent(item.imagePath)}" data-image-title="${encodeURIComponent(item.templateName)}" />`
+              ? `<img src="${localPathToAssetUrl(item.imagePath)}" alt="${escapeHtml(item.templateName)}" class="template-result-image" data-image-preview="${encodeURIComponent(item.imagePath)}" data-image-title="${encodeURIComponent(item.templateName)}" />`
               : `<div class="template-result-placeholder">这张模板图生成后会显示在这里</div>`
           }
         </div>
@@ -876,7 +979,7 @@ function renderTemplateResults() {
         <div class="template-result-meta">
           <div>
             <span>模板说明</span>
-            <strong>${item.templateDescription || "当前模板已选择"}</strong>
+            <strong>${escapeHtml(item.templateDescription || "当前模板已选择")}</strong>
           </div>
           <div>
             <span>最近生成时间</span>
@@ -921,15 +1024,19 @@ function syncVideoTemplateInputs(template) {
   applyVideoPreviewRatio(ratio);
 }
 
-async function handleVideoTemplatePick(templateId) {
-  const template = getVideoTemplateMeta(templateId);
-  const payload = {
+function videoTemplateConfigPayload(template) {
+  return {
     videoTemplateId: template.id,
     videoModelVersion: safeString(template.modelVersion, "seedance2.0_vip"),
     videoDuration: Number(template.duration || 15),
     videoRatio: safeString(template.ratio, "16:9"),
     videoResolution: safeString(template.videoResolution, "720p")
   };
+}
+
+async function handleVideoTemplatePick(templateId) {
+  const template = getVideoTemplateMeta(templateId);
+  const payload = videoTemplateConfigPayload(template);
   const currentVideoConfig = state.dashboard?.localConfig?.video || {};
   const needsSave =
     payload.videoTemplateId !== safeString(currentVideoConfig.templateId, "") ||
@@ -992,6 +1099,7 @@ function renderVideoTemplateSelection() {
   grid.innerHTML = templates
     .map((template) => {
       const isSelected = template.id === selectedTemplateId;
+      const templateId = escapeHtml(template.id);
       const preview = template.templateVideoPath
         ? `<video src="${localPathToAssetUrl(template.templateVideoPath)}" muted loop playsinline autoplay preload="metadata"></video>`
         : `<div class="video-template-preview-fallback"></div>`;
@@ -999,7 +1107,7 @@ function renderVideoTemplateSelection() {
         <button
           class="video-template-card ${isSelected ? "is-selected" : ""}"
           type="button"
-          data-video-template-pick="${template.id}"
+          data-video-template-pick="${templateId}"
           aria-pressed="${isSelected ? "true" : "false"}"
         >
           <div class="video-template-preview">
@@ -1010,8 +1118,8 @@ function renderVideoTemplateSelection() {
             </div>
           </div>
           <div class="video-template-meta">
-            <strong>${template.name}</strong>
-            <p>${template.description || "视频模板只负责节奏展示，真正提交时只上传 3 张设备图、1 张发色图和提示词。"}</p>
+            <strong>${escapeHtml(template.name)}</strong>
+            <p>${escapeHtml(template.description || "视频模板只负责节奏展示，真正提交时只上传 3 张设备图、1 张发色图和提示词。")}</p>
             <small>模板示例仅用于客户端展示，不会作为 Dreamina 上传素材。</small>
           </div>
         </button>
@@ -1139,14 +1247,20 @@ function renderVideoGeneration() {
   setText("video-publish-xhs-status", publishStatusLabel(xhsPublish.status));
   setText("video-publish-douyin-status", publishStatusLabel(douyinPublish.status));
   setText("video-publish-error", xhsPublish.error || douyinPublish.error || "当前还没有视频发布错误。");
-  setText("video-hair-color-label", hairColorName ? `${hairColorName} · ${fileNameFromPath(hairColorImage)}` : "自动从发色图库随机选择");
+  const hairColorCandidateCount = state.dashboard?.mediaGeneration?.videoHairColorImages?.length || 0;
+  setText(
+    "video-hair-color-label",
+    hairColorName
+      ? `${hairColorName} · ${fileNameFromPath(hairColorImage)}`
+      : `自动从发色图库随机选择${hairColorCandidateCount ? `（${hairColorCandidateCount} 张候选）` : ""}`
+  );
   setText("video-output-dir-label", outputDir || "默认桌面/输出视频");
   const videoRefs =
     firstNonEmptyArray(videoPlan.reference_images, state.dashboard?.mediaGeneration?.videoReferenceImages, item.referenceImages);
   setText(
     "video-reference-label",
     videoRefs.length
-      ? `设备图 ${deviceRefs.length}/3 · 发色图 ${hairColorImage ? "1/1" : "0/1"}`
+      ? `设备图 ${deviceRefs.length}/3 · 发色图 ${hairColorImage ? "1/1" : (hairColorCandidateCount ? `随机池 ${hairColorCandidateCount} 张` : "0/1")}`
       : "将使用 3 张设备图 + 1 张发色图"
   );
 }
@@ -1162,6 +1276,275 @@ function openTemplateModal(slot) {
   renderTemplateModal();
   const backdrop = $("template-modal-backdrop");
   if (backdrop) backdrop.hidden = false;
+}
+
+function closeImageTemplateImportModal() {
+  const backdrop = $("image-template-import-backdrop");
+  if (backdrop) backdrop.hidden = true;
+}
+
+function resetImageTemplateImportForm() {
+  setValue("image-template-name", "");
+  setValue("image-template-description", "");
+  setValue("image-template-prompt-path", "");
+  setValue("image-template-preview-path", "");
+  renderImageTemplateImportPreview("");
+}
+
+function openImageTemplateImportModal() {
+  resetImageTemplateImportForm();
+  const backdrop = $("image-template-import-backdrop");
+  if (backdrop) backdrop.hidden = false;
+  $("image-template-name")?.focus();
+}
+
+function renderImageTemplateImportPreview(imagePath = "") {
+  const image = $("image-template-import-preview-image");
+  const empty = $("image-template-import-preview-empty");
+  const resolvedPath = safeString(imagePath, "").trim();
+  if (!image || !empty) return;
+  if (resolvedPath) {
+    image.src = localPathToAssetUrl(resolvedPath);
+    image.hidden = false;
+    empty.style.display = "none";
+    return;
+  }
+  image.removeAttribute("src");
+  image.hidden = true;
+  empty.style.display = "";
+}
+
+function closeVideoTemplateImportModal() {
+  const backdrop = $("video-template-import-backdrop");
+  if (backdrop) backdrop.hidden = true;
+}
+
+function resetVideoTemplateImportForm() {
+  setValue("video-template-name", "");
+  setValue("video-template-description", "");
+  setValue("video-template-prompt-path", "");
+  setValue("video-template-video-path", "");
+  setValue("video-template-douyin-path", "");
+  setValue("video-template-xhs-path", "");
+  setValue("video-template-model", "seedance2.0_vip");
+  setValue("video-template-duration", "15");
+  setValue("video-template-ratio", "16:9");
+  setValue("video-template-resolution", "720p");
+  renderVideoTemplateImportPreview("");
+}
+
+function openVideoTemplateImportModal() {
+  resetVideoTemplateImportForm();
+  const backdrop = $("video-template-import-backdrop");
+  if (backdrop) backdrop.hidden = false;
+  $("video-template-name")?.focus();
+}
+
+function renderVideoTemplateImportPreview(videoPath = "") {
+  const video = $("video-template-import-preview-video");
+  const empty = $("video-template-import-preview-empty");
+  const resolvedPath = safeString(videoPath, "").trim();
+  if (!video || !empty) return;
+  if (resolvedPath) {
+    video.src = localPathToAssetUrl(resolvedPath);
+    video.hidden = false;
+    empty.style.display = "none";
+    return;
+  }
+  video.removeAttribute("src");
+  video.hidden = true;
+  empty.style.display = "";
+}
+
+function ensureTemplateInCatalog(template) {
+  if (!template || !state.dashboard) return;
+  if (!state.dashboard.templateCatalog) {
+    state.dashboard.templateCatalog = { defaultTemplateId: template.id, templates: [] };
+  }
+  const templates = Array.isArray(state.dashboard.templateCatalog.templates)
+    ? state.dashboard.templateCatalog.templates
+    : [];
+  if (!templates.some((item) => item.id === template.id)) {
+    templates.push(template);
+  }
+  state.dashboard.templateCatalog.templates = templates;
+}
+
+function ensureVideoTemplateInCatalog(template) {
+  if (!template || !state.dashboard) return;
+  if (!state.dashboard.videoTemplateCatalog) {
+    state.dashboard.videoTemplateCatalog = { defaultTemplateId: template.id, templates: [] };
+  }
+  const templates = Array.isArray(state.dashboard.videoTemplateCatalog.templates)
+    ? state.dashboard.videoTemplateCatalog.templates
+    : [];
+  if (!templates.some((item) => item.id === template.id)) {
+    templates.push(template);
+  }
+  state.dashboard.videoTemplateCatalog.templates = templates;
+}
+
+async function selectTemplateForActiveSlot(templateId) {
+  const activeSlot = Number(state.activeTemplateSlot);
+  if (!activeSlot || !templateId) return null;
+  const currentSelection = state.selectedTemplates.length ? state.selectedTemplates : defaultSelectedTemplates();
+  const nextSelection = currentSelection.map((item) =>
+    Number(item.slot) === activeSlot ? { ...item, templateId } : item
+  );
+  state.selectedTemplates = nextSelection;
+  renderTemplateSelection();
+  return window.desktopApp.saveTemplateSelection({
+    date: state.dashboard?.meta?.date,
+    selectedTemplates: nextSelection
+  });
+}
+
+async function handleImageTemplateImport(event) {
+  event.preventDefault();
+  const activeSlot = Number(state.activeTemplateSlot);
+  if (!activeSlot) {
+    setActionStatus({
+      action: "import-image-template",
+      state: "error",
+      progress: 1,
+      detail: "请先选择要替换的模板槽位。",
+      stepLabel: "缺少槽位"
+    });
+    return;
+  }
+
+  const payload = {
+    name: $("image-template-name")?.value || "",
+    description: $("image-template-description")?.value || "",
+    promptTemplatePath: $("image-template-prompt-path")?.value || "",
+    previewImagePath: $("image-template-preview-path")?.value || ""
+  };
+
+  setButtonsBusy(true);
+  setActionStatus({
+    action: "import-image-template",
+    state: "running",
+    progress: 0.24,
+    indeterminate: true,
+    detail: "正在复制本地模板文件。",
+    stepLabel: "导入模板"
+  });
+  try {
+    const result = await window.desktopApp.importImageTemplate(payload);
+    if (!result?.ok || !result.template?.id) {
+      setActionStatus({
+        action: "import-image-template",
+        state: "error",
+        progress: 0.92,
+        detail: result?.error || "本地模板导入失败。",
+        stepLabel: "导入失败"
+      });
+      logOutput(result?.error || "本地模板导入失败。");
+      return;
+    }
+
+    ensureTemplateInCatalog(result.template);
+    const selectionResult = await selectTemplateForActiveSlot(result.template.id);
+    if (!selectionResult?.ok) {
+      setActionStatus({
+        action: "import-image-template",
+        state: "error",
+        progress: 0.92,
+        detail: selectionResult?.error || "模板已导入，但槽位保存失败。",
+        stepLabel: "保存失败"
+      });
+      logOutput(selectionResult?.error || "模板已导入，但槽位保存失败。");
+      return;
+    }
+
+    closeImageTemplateImportModal();
+    closeTemplateModal();
+    setActionStatus({
+      action: "import-image-template",
+      state: "success",
+      progress: 1,
+      detail: `本地模板已导入并选入模板 ${activeSlot}。`,
+      stepLabel: "导入完成"
+    });
+    logOutput(`本地图片模板已导入：${result.template.name}\n${result.catalogPath || ""}`.trim());
+    await refreshDashboard(state.environmentReport);
+  } finally {
+    setButtonsBusy(false);
+  }
+}
+
+async function handleVideoTemplateImport(event) {
+  event.preventDefault();
+  const payload = {
+    name: $("video-template-name")?.value || "",
+    description: $("video-template-description")?.value || "",
+    promptTemplatePath: $("video-template-prompt-path")?.value || "",
+    templateVideoPath: $("video-template-video-path")?.value || "",
+    douyinNoteTemplatePath: $("video-template-douyin-path")?.value || "",
+    xiaohongshuBodyTemplatePath: $("video-template-xhs-path")?.value || "",
+    modelVersion: $("video-template-model")?.value || "seedance2.0_vip",
+    duration: Number($("video-template-duration")?.value || 15),
+    ratio: $("video-template-ratio")?.value || "16:9",
+    videoResolution: $("video-template-resolution")?.value || "720p"
+  };
+
+  setButtonsBusy(true);
+  setActionStatus({
+    action: "import-video-template",
+    state: "running",
+    progress: 0.24,
+    indeterminate: true,
+    detail: "正在复制本地视频模板文件。",
+    stepLabel: "导入模板"
+  });
+  try {
+    const result = await window.desktopApp.importVideoTemplate(payload);
+    if (!result?.ok || !result.template?.id) {
+      setActionStatus({
+        action: "import-video-template",
+        state: "error",
+        progress: 0.92,
+        detail: result?.error || "本地视频模板导入失败。",
+        stepLabel: "导入失败"
+      });
+      logOutput(result?.error || "本地视频模板导入失败。");
+      return;
+    }
+
+    ensureVideoTemplateInCatalog(result.template);
+    state.selectedVideoTemplateId = result.template.id;
+    syncVideoTemplateInputs(result.template);
+    renderVideoTemplateSelection();
+    renderVideoGeneration();
+
+    const saveResult = await window.desktopApp.saveLocalConfig(videoTemplateConfigPayload(result.template));
+    if (!saveResult?.ok) {
+      setActionStatus({
+        action: "import-video-template",
+        state: "error",
+        progress: 0.92,
+        detail: saveResult?.error || "模板已导入，但视频模板配置保存失败。",
+        stepLabel: "保存失败"
+      });
+      logOutput(saveResult?.error || "模板已导入，但视频模板配置保存失败。");
+      return;
+    }
+
+    closeVideoTemplateImportModal();
+    state.environmentReport = null;
+    clearEnvironmentStatus();
+    setActionStatus({
+      action: "import-video-template",
+      state: "success",
+      progress: 1,
+      detail: `本地视频模板已导入并选用：${result.template.name}。`,
+      stepLabel: "导入完成"
+    });
+    logOutput(`本地视频模板已导入：${result.template.name}\n${result.catalogPath || ""}`.trim());
+    await refreshDashboard(null);
+  } finally {
+    setButtonsBusy(false);
+  }
 }
 
 function renderTemplateModal() {
@@ -1196,8 +1579,8 @@ function renderTemplateModal() {
           ${disabled ? "disabled" : ""}
         >
           ${renderTemplatePreview(template)}
-          <strong>${template.name}</strong>
-          <small>${disabled ? "已被其他槽位占用" : (template.description || "可用于今日生成")}</small>
+          <strong>${escapeHtml(template.name)}</strong>
+          <small>${escapeHtml(disabled ? "已被其他槽位占用" : (template.description || "可用于今日生成"))}</small>
         </button>
       `;
     })
@@ -1680,7 +2063,7 @@ function renderOnboarding() {
   const sauInput = $("onboarding-sau-root");
   if (sauInput) sauInput.value = safeString(localConfig.publish?.sauRoot || dependencyReport?.recommendedConfig?.sauRoot, "");
   setValue("onboarding-image-provider", safeString(localConfig.image?.provider, "dreamina"));
-  setValue("onboarding-nano-banana-model", safeString(localConfig.image?.nanoBananaModel, "gemini-3-pro-image-preview-high"));
+  setValue("onboarding-nano-banana-model", safeString(localConfig.image?.nanoBananaModel, "gemini-3-pro-image-preview"));
   setValue("onboarding-nano-banana-api-base", safeString(localConfig.image?.nanoBananaApiBase, ""));
   const onboardingGeminiInput = $("onboarding-gemini-api-key");
   if (onboardingGeminiInput) {
@@ -1802,6 +2185,7 @@ function applyDashboard(dashboard, environment = null) {
     dashboard.bestBrief?.winner?.brief?.brief_id ||
     dashboard.briefs?.items?.[0]?.brief_id ||
     null;
+  syncPublishVisibilityDraftFromConfig();
 
   const upstream = dashboard.upstream || {};
   const bestBriefRoot = dashboard.bestBrief || {};
@@ -1869,17 +2253,18 @@ function applyDashboard(dashboard, environment = null) {
     dashboard.videoGallery?.item?.hairColorReferenceImage ||
     dashboard.localConfig?.video?.selectedHairColorImage ||
     "";
+  const hairColorCandidateCount = dashboard.mediaGeneration?.videoHairColorImages?.length || 0;
   setText(
     "settings-video-reference-state",
     videoRefs.length
-      ? `设备图 ${deviceRefs.length}/3 · 发色图 ${selectedHair ? "1/1" : "0/1"}`
+      ? `设备图 ${deviceRefs.length}/3 · 发色图 ${selectedHair ? "1/1" : (hairColorCandidateCount ? `随机池 ${hairColorCandidateCount} 张` : "0/1")}`
       : "将使用 3 张设备图 + 1 张发色图"
   );
   setValue("media-hair-color-dir", safeString(dashboard.localConfig?.video?.hairColorReferenceDir, ""));
   setValue("media-video-downloads-dir", safeString(dashboard.localConfig?.video?.downloadsDir || dashboard.paths?.videoDownloadsDir, ""));
   setValue("video-page-hair-color-image", safeString(dashboard.localConfig?.video?.selectedHairColorImage, ""));
-  setValue("media-nano-banana-model", safeString(dashboard.localConfig?.image?.nanoBananaModel, "gemini-3-pro-image-preview-high"));
-  setValue("onboarding-nano-banana-model", safeString(dashboard.localConfig?.image?.nanoBananaModel, "gemini-3-pro-image-preview-high"));
+  setValue("media-nano-banana-model", safeString(dashboard.localConfig?.image?.nanoBananaModel, "gemini-3-pro-image-preview"));
+  setValue("onboarding-nano-banana-model", safeString(dashboard.localConfig?.image?.nanoBananaModel, "gemini-3-pro-image-preview"));
   setValue("media-nano-banana-api-base", safeString(dashboard.localConfig?.image?.nanoBananaApiBase, ""));
   setValue("onboarding-nano-banana-api-base", safeString(dashboard.localConfig?.image?.nanoBananaApiBase, ""));
   const providerInput = $("media-image-provider");
@@ -1985,6 +2370,7 @@ function applyDashboard(dashboard, environment = null) {
   renderTemplateSelection();
   renderVideoTemplateSelection();
   renderVideoGeneration();
+  renderPublishVisibilityControls();
   renderAccountsView();
   refreshMotionDelays(document);
   bindPointerSurfaces(document);
@@ -2098,7 +2484,7 @@ async function runAction(action, extra = {}) {
         videoDownloadsDir: $("onboarding-video-downloads-dir")?.value || "",
         sauRoot: $("onboarding-sau-root")?.value || "",
         imageProvider: $("onboarding-image-provider")?.value || "dreamina",
-        nanoBananaModel: $("onboarding-nano-banana-model")?.value || "gemini-3-pro-image-preview-high",
+        nanoBananaModel: $("onboarding-nano-banana-model")?.value || "gemini-3-pro-image-preview",
         nanoBananaApiBase: $("onboarding-nano-banana-api-base")?.value || ""
       };
       const onboardingGeminiApiKey = $("onboarding-gemini-api-key")?.value || "";
@@ -2135,7 +2521,7 @@ async function runAction(action, extra = {}) {
       );
       const payload = {
         imageProvider: $("media-image-provider")?.value || "dreamina",
-        nanoBananaModel: $("media-nano-banana-model")?.value || state.dashboard?.localConfig?.image?.nanoBananaModel || "gemini-3-pro-image-preview-high",
+        nanoBananaModel: $("media-nano-banana-model")?.value || state.dashboard?.localConfig?.image?.nanoBananaModel || "gemini-3-pro-image-preview",
         nanoBananaApiBase: $("media-nano-banana-api-base")?.value || "",
         videoTemplateId: selectedVideoTemplateId,
         videoHairColorReferenceDir: $("media-hair-color-dir")?.value || "",
@@ -2161,6 +2547,38 @@ async function runAction(action, extra = {}) {
         stepLabel: result?.ok ? "保存完成" : "保存失败"
       });
       logOutput(result?.ok ? `媒体生成配置已保存到本机 local.json\n${result.path}` : "媒体生成配置保存失败。");
+      await refreshDashboard(null);
+    } finally {
+      setButtonsBusy(false);
+    }
+    return;
+  }
+
+  if (action === "save-publish-visibility") {
+    const draft = ensurePublishVisibilityDraft();
+    setButtonsBusy(true);
+    setActionStatus({ action, state: "running", progress: 0.22, indeterminate: true });
+    logOutput("正在保存发布可见性默认配置...");
+    try {
+      const result = await window.desktopApp.saveLocalConfig({
+        publishXiaohongshuPrivate: draft.xiaohongshu !== false,
+        publishDouyinPrivate: draft.douyin !== false
+      });
+      if (result?.ok) {
+        state.publishVisibilityDraftDirty = false;
+        state.environmentReport = null;
+        clearEnvironmentStatus();
+      }
+      setActionStatus({
+        action,
+        state: result?.ok ? "success" : "error",
+        progress: result?.ok ? 1 : 0.92,
+        detail: result?.ok
+          ? `发布默认已保存：小红书${publishVisibilityLabel(draft.xiaohongshu !== false)}，抖音${publishVisibilityLabel(draft.douyin !== false)}。`
+          : (result?.error || "发布可见性默认保存失败。"),
+        stepLabel: result?.ok ? "保存完成" : "保存失败"
+      });
+      logOutput(result?.ok ? `发布可见性默认已保存到 local.json\n${result.path || ""}`.trim() : (result?.error || "发布可见性默认保存失败。"));
       await refreshDashboard(null);
     } finally {
       setButtonsBusy(false);
@@ -2499,7 +2917,13 @@ async function runAction(action, extra = {}) {
   setActionStatus({ action: resolvedAction, state: "running", progress: 0.08, indeterminate: true });
   logOutput("运行中…");
   try {
-    const result = await window.desktopApp.runWorkflowAction({ action: resolvedAction, product: "ransebao", date, ...extra });
+    const result = await window.desktopApp.runWorkflowAction({
+      action: resolvedAction,
+      product: "ransebao",
+      date,
+      ...extra,
+      ...publishVisibilityPayloadForAction(resolvedAction)
+    });
     if (result?.background) {
       logOutput(result.stdout || "任务已提交，正在后台执行。");
       if (resolvedAction === "execute-image" || resolvedAction === "execute-video" || resolvedAction === "execute-video-regenerate") {
@@ -2695,9 +3119,33 @@ function bindMirroredConfigControls() {
   });
 }
 
+function bindPublishVisibilityControls() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-publish-visibility-platform]");
+    if (!button || button.disabled) return;
+    event.preventDefault();
+    setPublishVisibilityDraft(
+      button.dataset.publishVisibilityPlatform,
+      button.dataset.publishVisibilityValue !== "public"
+    );
+  });
+}
+
 function bindTemplateExperience() {
   const backdrop = $("template-modal-backdrop");
   const closeButton = $("template-modal-close");
+  const importOpenButton = $("image-template-import-open");
+  const importBackdrop = $("image-template-import-backdrop");
+  const importCloseButton = $("image-template-import-close");
+  const importCancelButton = $("image-template-import-cancel");
+  const importForm = $("image-template-import-form");
+  const importPreviewInput = $("image-template-preview-path");
+  const videoImportOpenButton = $("video-template-import-open");
+  const videoImportBackdrop = $("video-template-import-backdrop");
+  const videoImportCloseButton = $("video-template-import-close");
+  const videoImportCancelButton = $("video-template-import-cancel");
+  const videoImportForm = $("video-template-import-form");
+  const videoImportPreviewInput = $("video-template-video-path");
   const imagePreviewBackdrop = $("image-preview-backdrop");
   const imagePreviewClose = $("image-preview-close");
   const dependencyLogBackdrop = $("dependency-log-backdrop");
@@ -2708,6 +3156,60 @@ function bindTemplateExperience() {
   if (backdrop) {
     backdrop.addEventListener("click", (event) => {
       if (event.target === backdrop) closeTemplateModal();
+    });
+  }
+  if (importOpenButton) {
+    importOpenButton.addEventListener("click", openImageTemplateImportModal);
+  }
+  if (importCloseButton) {
+    importCloseButton.addEventListener("click", closeImageTemplateImportModal);
+  }
+  if (importCancelButton) {
+    importCancelButton.addEventListener("click", closeImageTemplateImportModal);
+  }
+  if (importBackdrop) {
+    importBackdrop.addEventListener("click", (event) => {
+      if (event.target === importBackdrop) closeImageTemplateImportModal();
+    });
+  }
+  if (importForm) {
+    importForm.addEventListener("submit", (event) => {
+      void handleImageTemplateImport(event);
+    });
+  }
+  if (importPreviewInput) {
+    importPreviewInput.addEventListener("input", () => {
+      renderImageTemplateImportPreview(importPreviewInput.value);
+    });
+    importPreviewInput.addEventListener("change", () => {
+      renderImageTemplateImportPreview(importPreviewInput.value);
+    });
+  }
+  if (videoImportOpenButton) {
+    videoImportOpenButton.addEventListener("click", openVideoTemplateImportModal);
+  }
+  if (videoImportCloseButton) {
+    videoImportCloseButton.addEventListener("click", closeVideoTemplateImportModal);
+  }
+  if (videoImportCancelButton) {
+    videoImportCancelButton.addEventListener("click", closeVideoTemplateImportModal);
+  }
+  if (videoImportBackdrop) {
+    videoImportBackdrop.addEventListener("click", (event) => {
+      if (event.target === videoImportBackdrop) closeVideoTemplateImportModal();
+    });
+  }
+  if (videoImportForm) {
+    videoImportForm.addEventListener("submit", (event) => {
+      void handleVideoTemplateImport(event);
+    });
+  }
+  if (videoImportPreviewInput) {
+    videoImportPreviewInput.addEventListener("input", () => {
+      renderVideoTemplateImportPreview(videoImportPreviewInput.value);
+    });
+    videoImportPreviewInput.addEventListener("change", () => {
+      renderVideoTemplateImportPreview(videoImportPreviewInput.value);
     });
   }
   if (imagePreviewClose) {
@@ -2728,6 +3230,14 @@ function bindTemplateExperience() {
   }
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      if (!$("video-template-import-backdrop")?.hidden) {
+        closeVideoTemplateImportModal();
+        return;
+      }
+      if (!$("image-template-import-backdrop")?.hidden) {
+        closeImageTemplateImportModal();
+        return;
+      }
       if (!$("image-preview-backdrop")?.hidden) closeImagePreview();
       if (!$("template-modal-backdrop")?.hidden) closeTemplateModal();
       if (!$("account-modal-backdrop")?.hidden) closeAccountModal();
@@ -2754,13 +3264,24 @@ function bindOnboardingExperience() {
     const inputId = trigger.dataset.pickPath;
     const input = $(inputId);
     if (!input) return;
+    const extensions = safeString(trigger.dataset.pickExtensions, "")
+      .split(",")
+      .map((item) => item.trim().replace(/^\./, ""))
+      .filter(Boolean);
     const result = await window.desktopApp.pickPath({
       type: trigger.dataset.pickKind || "directory",
       title: trigger.dataset.pickTitle || "选择路径",
-      defaultPath: input.value || ""
+      defaultPath: input.value || "",
+      filters: extensions.length ? [{ name: "Supported files", extensions }] : undefined
     });
     if (!result?.canceled && result?.path) {
       input.value = result.path;
+      if (inputId === "image-template-preview-path") {
+        renderImageTemplateImportPreview(result.path);
+      }
+      if (inputId === "video-template-video-path") {
+        renderVideoTemplateImportPreview(result.path);
+      }
     }
   });
 }
@@ -2837,6 +3358,7 @@ function bindSidebarFloat() {
 async function bootstrap() {
   bindNavigation();
   bindMirroredConfigControls();
+  bindPublishVisibilityControls();
   bindTemplateExperience();
   bindAccountExperience();
   bindOnboardingExperience();

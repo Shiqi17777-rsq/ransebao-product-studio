@@ -4,6 +4,10 @@ function buildCliArgs(runtimeRoot, command, options = {}) {
   if (options.scope) args.push("--scope", options.scope);
   if (options.templateId) args.push("--template-id", options.templateId);
   if (options.slot) args.push("--slot", String(options.slot));
+  if (options.publishXiaohongshuPrivate === true) args.push("--publish-xiaohongshu-private");
+  if (options.publishXiaohongshuPrivate === false) args.push("--publish-xiaohongshu-public");
+  if (options.publishDouyinPrivate === true) args.push("--publish-douyin-private");
+  if (options.publishDouyinPrivate === false) args.push("--publish-douyin-public");
   if (options.execute) args.push("--execute");
   return args;
 }

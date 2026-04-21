@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 from pathlib import Path
 
@@ -18,6 +19,64 @@ from .pipelines.content import build_briefs, build_brand_pool, route_topics, sel
 from .pipelines.image import build_prompt_assets
 from .pipelines.news import build_hot_pool
 from .services import execute_named_plan, write_execution_report
+
+
+def add_publish_visibility_args(command_parser: argparse.ArgumentParser) -> None:
+    xiaohongshu_group = command_parser.add_mutually_exclusive_group()
+    xiaohongshu_group.add_argument(
+        "--publish-xiaohongshu-private",
+        dest="publish_xiaohongshu_private",
+        action="store_true",
+        help="Temporarily publish Xiaohongshu posts as private for this run.",
+    )
+    xiaohongshu_group.add_argument(
+        "--publish-xiaohongshu-public",
+        dest="publish_xiaohongshu_private",
+        action="store_false",
+        help="Temporarily publish Xiaohongshu posts without the private flag for this run.",
+    )
+    douyin_group = command_parser.add_mutually_exclusive_group()
+    douyin_group.add_argument(
+        "--publish-douyin-private",
+        dest="publish_douyin_private",
+        action="store_true",
+        help="Temporarily publish Douyin posts as private for this run.",
+    )
+    douyin_group.add_argument(
+        "--publish-douyin-public",
+        dest="publish_douyin_private",
+        action="store_false",
+        help="Temporarily publish Douyin posts without the private flag for this run.",
+    )
+    command_parser.set_defaults(publish_xiaohongshu_private=None, publish_douyin_private=None)
+
+
+def publish_visibility_overrides_from_args(args: argparse.Namespace) -> dict[str, bool | None]:
+    return {
+        "xiaohongshu": getattr(args, "publish_xiaohongshu_private", None),
+        "douyin": getattr(args, "publish_douyin_private", None),
+    }
+
+
+def apply_publish_visibility_overrides(
+    local_config: dict,
+    publish_visibility_overrides: dict[str, bool | None] | None = None,
+) -> dict:
+    overrides = publish_visibility_overrides or {}
+    if not any(value is not None for value in overrides.values()):
+        return local_config
+
+    next_config = copy.deepcopy(local_config)
+    publish_cfg = next_config.setdefault("publish", {})
+    for platform, value in overrides.items():
+        if value is None:
+            continue
+        platform_cfg = publish_cfg.get(platform)
+        if not isinstance(platform_cfg, dict):
+            platform_cfg = {}
+        platform_cfg["private"] = bool(value)
+        publish_cfg[platform] = platform_cfg
+    return next_config
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -64,6 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--date", help="Target date in YYYY-MM-DD.")
     plan_parser.add_argument("--template-id", help="Override template id for image execution planning.")
     plan_parser.add_argument("--slot", type=int, help="Template slot for image execution planning.")
+    add_publish_visibility_args(plan_parser)
 
     execute_parser = subparsers.add_parser("execute-adapters", help="Run adapter execution for image, video, and/or publish steps.")
     execute_parser.add_argument("--product", default="ransebao", help="Product package id.")
@@ -87,6 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     execute_parser.add_argument("--template-id", help="Override template id for image execution.")
     execute_parser.add_argument("--slot", type=int, help="Template slot for image execution.")
+    add_publish_visibility_args(execute_parser)
 
     run_parser = subparsers.add_parser("run-daily", help="Dry-run the daily local workflow chain.")
     run_parser.add_argument("--product", default="ransebao", help="Product package id.")
@@ -121,8 +182,10 @@ def build_adapter_plans(
     *,
     template_id_override: str | None = None,
     slot: int | None = None,
+    publish_visibility_overrides: dict[str, bool | None] | None = None,
 ) -> tuple[dict, dict, dict[str, dict]]:
     local_config = load_local_runtime_config(paths.runtime_config_dir)
+    local_config = apply_publish_visibility_overrides(local_config, publish_visibility_overrides)
     video_prompt_result = build_video_prompt_result(paths, product_id, date_str)
     video_plan = plan_dreamina_video_generation(video_prompt_result["payload"], local_config)
     video_publish_payload = load_video_publish_payload(paths, product_id, video_plan)
@@ -272,6 +335,7 @@ def execute_adapters_command(
     include_prompt_build: bool = True,
     template_id_override: str | None = None,
     slot: int | None = None,
+    publish_visibility_overrides: dict[str, bool | None] | None = None,
 ) -> dict:
     prompt_result, video_prompt_result, plans = build_adapter_plans(
         paths,
@@ -279,6 +343,7 @@ def execute_adapters_command(
         date_str,
         template_id_override=template_id_override,
         slot=slot,
+        publish_visibility_overrides=publish_visibility_overrides,
     )
     target_date = video_prompt_result.get("date") or prompt_result["date"]
     execute_image = scope in {"all", "image"}
@@ -545,6 +610,7 @@ def main() -> int:
             scope="none",
             template_id_override=args.template_id,
             slot=args.slot,
+            publish_visibility_overrides=publish_visibility_overrides_from_args(args),
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
@@ -556,6 +622,7 @@ def main() -> int:
             scope=args.scope,
             template_id_override=args.template_id,
             slot=args.slot,
+            publish_visibility_overrides=publish_visibility_overrides_from_args(args),
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0

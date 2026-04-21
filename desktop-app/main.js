@@ -52,7 +52,12 @@ const publishAccountsPath = path.join(runtimeConfigDir, "publish_accounts.json")
 const dependencyProfilesPath = path.join(productStudioRoot, "packaging", "dependency_profiles.json");
 const templateConfigPath = path.join(productStudioRoot, "products", "ransebao", "prompts", "image_prompt_defaults.json");
 const templatePreviewDir = path.join(__dirname, "src", "assets", "template-previews");
+const imageTemplateImportsDir = path.join(runtimeRoot, "assets", "image-templates");
+const videoTemplateImportsDir = path.join(runtimeRoot, "assets", "video-templates");
 const DEFAULT_TEMPLATE_IDS = ["portrait-hero", "product-hero", "black-prismatic", "blue-minimal"];
+const IMPORTED_IMAGE_TEMPLATE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const IMPORTED_VIDEO_TEMPLATE_EXTENSIONS = new Set([".mp4"]);
+const IMPORTED_TEMPLATE_TEXT_EXTENSIONS = new Set([".txt", ".md"]);
 const TEMPLATE_PREVIEW_FILES = {
   "portrait-hero": "portrait-hero-preview.png",
   "product-hero": "product-hero-preview.png",
@@ -74,6 +79,8 @@ function ensureRuntimeBootstrap() {
     path.join(runtimeRoot, "state"),
     path.join(runtimeRoot, "outputs"),
     path.join(runtimeRoot, "cache"),
+    imageTemplateImportsDir,
+    videoTemplateImportsDir,
     path.join(runtimeRoot, "logs"),
     path.join(runtimeRoot, "logs", "dependencies")
   ].forEach((targetPath) => {
@@ -757,14 +764,18 @@ function writeLocalRuntimeConfig(payload = {}) {
         payload.patchrightBrowsersPath ?? current?.publish?.patchright_browsers_path
       ),
       xiaohongshu: {
-        private: (current?.publish?.xiaohongshu?.private ?? true),
-        headed: (current?.publish?.xiaohongshu?.headed ?? true),
-        ...((current?.publish || {}).xiaohongshu || {})
+        ...((current?.publish || {}).xiaohongshu || {}),
+        private: typeof payload.publishXiaohongshuPrivate === "boolean"
+          ? payload.publishXiaohongshuPrivate
+          : (current?.publish?.xiaohongshu?.private ?? true),
+        headed: current?.publish?.xiaohongshu?.headed ?? true
       },
       douyin: {
-        private: (current?.publish?.douyin?.private ?? true),
-        headed: (current?.publish?.douyin?.headed ?? true),
         ...((current?.publish || {}).douyin || {}),
+        private: typeof payload.publishDouyinPrivate === "boolean"
+          ? payload.publishDouyinPrivate
+          : (current?.publish?.douyin?.private ?? true),
+        headed: current?.publish?.douyin?.headed ?? true,
         root: nextSauRoot
       }
     }
@@ -1378,11 +1389,358 @@ const { installBundledDependency, installExternalDependency } = createDependency
   downloadFileWithElectronNet
 });
 
+function slugifyTemplateName(value) {
+  const normalized = String(value || "template")
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "template";
+}
+
+function importedTemplateTimestamp() {
+  return new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+}
+
+function normalizeVideoTemplateDuration(value, fallback = 15) {
+  const duration = Number(value);
+  return Number.isFinite(duration) && duration > 0 ? duration : fallback;
+}
+
+function resolveImportedTemplateFile(templateDir, value, fallbackName) {
+  const configured = configuredString(value);
+  const candidates = [
+    configured,
+    fallbackName ? path.join(templateDir, fallbackName) : ""
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      if (fs.statSync(candidate).isFile()) return candidate;
+    } catch {}
+  }
+  return "";
+}
+
+function normalizeImportedImageTemplate(templateDir, payload = {}) {
+  const id = configuredString(payload.id || path.basename(templateDir));
+  if (!/^local-[a-z0-9-]+$/.test(id)) return null;
+  const promptTemplatePath = resolveImportedTemplateFile(
+    templateDir,
+    payload.promptTemplatePath || payload.prompt_template_path,
+    "prompt_template.txt"
+  );
+  const previewImagePath = (
+    resolveImportedTemplateFile(templateDir, payload.previewImagePath || payload.preview_image_path, "preview.png") ||
+    resolveImportedTemplateFile(templateDir, payload.previewImagePath || payload.preview_image_path, "preview.jpg") ||
+    resolveImportedTemplateFile(templateDir, payload.previewImagePath || payload.preview_image_path, "preview.jpeg") ||
+    resolveImportedTemplateFile(templateDir, payload.previewImagePath || payload.preview_image_path, "preview.webp")
+  );
+  if (!promptTemplatePath || !previewImagePath) return null;
+  if (!IMPORTED_IMAGE_TEMPLATE_EXTENSIONS.has(path.extname(previewImagePath).toLowerCase())) return null;
+
+  return {
+    id,
+    source: "local_import",
+    name: configuredString(payload.name) || id,
+    description: configuredString(payload.description),
+    layoutFocus: configuredString(payload.layoutFocus || payload.layout_focus || payload.description),
+    promptStyle: configuredString(payload.promptStyle || payload.prompt_style),
+    visualModifiers: Array.isArray(payload.visualModifiers)
+      ? payload.visualModifiers
+      : (Array.isArray(payload.visual_modifiers) ? payload.visual_modifiers : []),
+    promptTemplatePath,
+    previewImagePath,
+    promptMode: configuredString(payload.promptMode || payload.prompt_mode) || "merge",
+    referenceImageMode: configuredString(payload.referenceImageMode || payload.reference_image_mode) || "preview_only",
+    createdAt: payload.createdAt || null,
+    updatedAt: payload.updatedAt || null
+  };
+}
+
+function loadImportedImageTemplates() {
+  try {
+    if (!fs.existsSync(imageTemplateImportsDir)) return [];
+    return fs
+      .readdirSync(imageTemplateImportsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => {
+        const templateDir = path.join(imageTemplateImportsDir, entry.name);
+        const payload = readJsonSafe(path.join(templateDir, "template.json"));
+        return payload ? normalizeImportedImageTemplate(templateDir, payload) : null;
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function importImageTemplate(payload = {}) {
+  try {
+    const name = configuredString(payload.name);
+    const description = configuredString(payload.description);
+    const promptTemplatePath = configuredString(payload.promptTemplatePath);
+    const previewImagePath = configuredString(payload.previewImagePath);
+
+    if (!name) return { ok: false, error: "Template name is required." };
+    if (!promptTemplatePath) return { ok: false, error: "Prompt template file is required." };
+    if (!previewImagePath) return { ok: false, error: "Preview image file is required." };
+
+    let promptText = "";
+    try {
+      if (!fs.statSync(promptTemplatePath).isFile()) {
+        return { ok: false, error: "Prompt template path is not a file." };
+      }
+      promptText = fs.readFileSync(promptTemplatePath, "utf8").trim();
+    } catch (error) {
+      return { ok: false, error: error?.message || "Unable to read prompt template file." };
+    }
+    if (!promptText) return { ok: false, error: "Prompt template file is empty." };
+
+    const imageExt = path.extname(previewImagePath).toLowerCase();
+    if (!IMPORTED_IMAGE_TEMPLATE_EXTENSIONS.has(imageExt)) {
+      return { ok: false, error: "Preview image must be .png, .jpg, .jpeg, or .webp." };
+    }
+    try {
+      if (!fs.statSync(previewImagePath).isFile()) {
+        return { ok: false, error: "Preview image path is not a file." };
+      }
+    } catch (error) {
+      return { ok: false, error: error?.message || "Unable to read preview image file." };
+    }
+
+    fs.mkdirSync(imageTemplateImportsDir, { recursive: true });
+    const baseId = `local-${slugifyTemplateName(name)}-${importedTemplateTimestamp()}`;
+    let id = baseId;
+    let suffix = 2;
+    while (fs.existsSync(path.join(imageTemplateImportsDir, id))) {
+      id = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+
+    const templateDir = path.join(imageTemplateImportsDir, id);
+    fs.mkdirSync(templateDir, { recursive: true });
+    const copiedPromptPath = path.join(templateDir, "prompt_template.txt");
+    const copiedPreviewPath = path.join(templateDir, `preview${imageExt}`);
+    fs.copyFileSync(promptTemplatePath, copiedPromptPath);
+    fs.copyFileSync(previewImagePath, copiedPreviewPath);
+
+    const now = new Date().toISOString();
+    const templatePayload = {
+      id,
+      source: "local_import",
+      name,
+      description,
+      promptTemplatePath: copiedPromptPath,
+      previewImagePath: copiedPreviewPath,
+      promptMode: "merge",
+      referenceImageMode: "preview_only",
+      createdAt: now,
+      updatedAt: now
+    };
+    const catalogPath = path.join(templateDir, "template.json");
+    writeJsonSafe(catalogPath, templatePayload);
+
+    return {
+      ok: true,
+      template: normalizeImportedImageTemplate(templateDir, templatePayload),
+      catalogPath
+    };
+  } catch (error) {
+    return { ok: false, error: error?.message || String(error || "Import failed.") };
+  }
+}
+
+function normalizeImportedVideoTemplate(templateDir, payload = {}) {
+  const id = configuredString(payload.id || path.basename(templateDir));
+  if (!/^local-[a-z0-9-]+$/.test(id)) return null;
+  const templateVideoPath = resolveImportedTemplateFile(
+    templateDir,
+    payload.templateVideoPath || payload.template_video_path || payload.template_video,
+    "template.mp4"
+  );
+  const promptTemplatePath = resolveImportedTemplateFile(
+    templateDir,
+    payload.promptTemplatePath || payload.prompt_template_path || payload.prompt_template,
+    "prompt_template.txt"
+  );
+  if (!templateVideoPath || !promptTemplatePath) return null;
+  if (!IMPORTED_VIDEO_TEMPLATE_EXTENSIONS.has(path.extname(templateVideoPath).toLowerCase())) return null;
+
+  const douyinNoteTemplatePath = resolveImportedTemplateFile(
+    templateDir,
+    payload.douyinNoteTemplatePath || payload.douyin_note_template_path || payload.douyin_note_template,
+    "douyin_note_template.txt"
+  );
+  const xiaohongshuBodyTemplatePath = resolveImportedTemplateFile(
+    templateDir,
+    payload.xiaohongshuBodyTemplatePath ||
+      payload.xiaohongshu_body_template_path ||
+      payload.xiaohongshu_body_template,
+    "xiaohongshu_body_template.txt"
+  );
+
+  return {
+    id,
+    source: "local_import",
+    name: configuredString(payload.name) || id,
+    description: configuredString(payload.description),
+    templateVideoPath,
+    promptTemplatePath,
+    douyinNoteTemplatePath,
+    xiaohongshuBodyTemplatePath,
+    modelVersion: configuredString(payload.modelVersion || payload.model_version) || "seedance2.0_vip",
+    duration: normalizeVideoTemplateDuration(payload.duration, 15),
+    ratio: configuredString(payload.ratio) || "16:9",
+    videoResolution: configuredString(payload.videoResolution || payload.video_resolution) || "720p",
+    createdAt: payload.createdAt || null,
+    updatedAt: payload.updatedAt || null
+  };
+}
+
+function loadImportedVideoTemplates() {
+  try {
+    if (!fs.existsSync(videoTemplateImportsDir)) return [];
+    return fs
+      .readdirSync(videoTemplateImportsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => {
+        const templateDir = path.join(videoTemplateImportsDir, entry.name);
+        const payload = readJsonSafe(path.join(templateDir, "template.json"));
+        return payload ? normalizeImportedVideoTemplate(templateDir, payload) : null;
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function validateImportedTextTemplate(filePath, label) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (!IMPORTED_TEMPLATE_TEXT_EXTENSIONS.has(ext)) {
+    return { ok: false, error: `${label} must be .txt or .md.` };
+  }
+  try {
+    if (!fs.statSync(filePath).isFile()) {
+      return { ok: false, error: `${label} path is not a file.` };
+    }
+    const text = fs.readFileSync(filePath, "utf8").trim();
+    if (!text) return { ok: false, error: `${label} is empty.` };
+    return { ok: true, text };
+  } catch (error) {
+    return { ok: false, error: error?.message || `Unable to read ${label}.` };
+  }
+}
+
+function importVideoTemplate(payload = {}) {
+  try {
+    const name = configuredString(payload.name);
+    const description = configuredString(payload.description);
+    const promptTemplatePath = configuredString(payload.promptTemplatePath);
+    const templateVideoPath = configuredString(payload.templateVideoPath);
+    const douyinNoteTemplatePath = configuredString(payload.douyinNoteTemplatePath);
+    const xiaohongshuBodyTemplatePath = configuredString(payload.xiaohongshuBodyTemplatePath);
+    const modelVersion = configuredString(payload.modelVersion || payload.videoModelVersion) || "seedance2.0_vip";
+    const duration = normalizeVideoTemplateDuration(payload.duration || payload.videoDuration, 15);
+    const ratio = configuredString(payload.ratio || payload.videoRatio) || "16:9";
+    const videoResolution = configuredString(payload.videoResolution || payload.video_resolution) || "720p";
+
+    if (!name) return { ok: false, error: "Template name is required." };
+    if (!promptTemplatePath) return { ok: false, error: "Video prompt template file is required." };
+    if (!templateVideoPath) return { ok: false, error: "Template preview video file is required." };
+
+    const promptValidation = validateImportedTextTemplate(promptTemplatePath, "Video prompt template file");
+    if (!promptValidation.ok) return promptValidation;
+
+    const videoExt = path.extname(templateVideoPath).toLowerCase();
+    if (!IMPORTED_VIDEO_TEMPLATE_EXTENSIONS.has(videoExt)) {
+      return { ok: false, error: "Template preview video must be .mp4." };
+    }
+    try {
+      if (!fs.statSync(templateVideoPath).isFile()) {
+        return { ok: false, error: "Template preview video path is not a file." };
+      }
+    } catch (error) {
+      return { ok: false, error: error?.message || "Unable to read template preview video file." };
+    }
+
+    const optionalTextFiles = [
+      { source: douyinNoteTemplatePath, targetName: "douyin_note_template.txt", label: "Douyin note template file" },
+      {
+        source: xiaohongshuBodyTemplatePath,
+        targetName: "xiaohongshu_body_template.txt",
+        label: "Xiaohongshu body template file"
+      }
+    ];
+    for (const item of optionalTextFiles) {
+      if (!item.source) continue;
+      const validation = validateImportedTextTemplate(item.source, item.label);
+      if (!validation.ok) return validation;
+    }
+
+    fs.mkdirSync(videoTemplateImportsDir, { recursive: true });
+    const baseId = `local-${slugifyTemplateName(name)}-${importedTemplateTimestamp()}`;
+    let id = baseId;
+    let suffix = 2;
+    while (fs.existsSync(path.join(videoTemplateImportsDir, id))) {
+      id = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+
+    const templateDir = path.join(videoTemplateImportsDir, id);
+    fs.mkdirSync(templateDir, { recursive: true });
+    const copiedPromptPath = path.join(templateDir, "prompt_template.txt");
+    const copiedVideoPath = path.join(templateDir, `template${videoExt}`);
+    fs.copyFileSync(promptTemplatePath, copiedPromptPath);
+    fs.copyFileSync(templateVideoPath, copiedVideoPath);
+
+    const optionalPayload = {};
+    for (const item of optionalTextFiles) {
+      if (!item.source) continue;
+      const targetPath = path.join(templateDir, item.targetName);
+      fs.copyFileSync(item.source, targetPath);
+      if (item.targetName === "douyin_note_template.txt") {
+        optionalPayload.douyinNoteTemplatePath = targetPath;
+      }
+      if (item.targetName === "xiaohongshu_body_template.txt") {
+        optionalPayload.xiaohongshuBodyTemplatePath = targetPath;
+      }
+    }
+
+    const now = new Date().toISOString();
+    const templatePayload = {
+      id,
+      source: "local_import",
+      name,
+      description,
+      templateVideoPath: copiedVideoPath,
+      promptTemplatePath: copiedPromptPath,
+      ...optionalPayload,
+      modelVersion,
+      duration,
+      ratio,
+      videoResolution,
+      createdAt: now,
+      updatedAt: now
+    };
+    const catalogPath = path.join(templateDir, "template.json");
+    writeJsonSafe(catalogPath, templatePayload);
+
+    return {
+      ok: true,
+      template: normalizeImportedVideoTemplate(templateDir, templatePayload),
+      catalogPath
+    };
+  } catch (error) {
+    return { ok: false, error: error?.message || String(error || "Import failed.") };
+  }
+}
+
 function loadTemplateCatalog() {
   const config = readJsonSafe(templateConfigPath) || {};
   const templates = config.templates || {};
   const entries = Object.entries(templates).map(([id, template]) => ({
     id,
+    source: "built_in",
     name: template?.name || id,
     description: template?.description || "",
     layoutFocus: template?.layout_focus || "",
@@ -1395,10 +1753,13 @@ function loadTemplateCatalog() {
       return fs.existsSync(targetPath) ? targetPath : null;
     })()
   }));
+  const importedTemplates = loadImportedImageTemplates().filter(
+    (template) => !entries.some((entry) => entry.id === template.id)
+  );
   return {
     defaultTemplateId: config.default_template || DEFAULT_TEMPLATE_IDS[0],
     legacyTemplateAliases: config.legacy_template_aliases || {},
-    templates: entries
+    templates: [...entries, ...importedTemplates]
   };
 }
 
@@ -2120,6 +2481,8 @@ app.whenReady().then(() => {
     normalizeTemplateSelection,
     readJsonSafe,
     loadTemplateCatalog,
+    importImageTemplate,
+    importVideoTemplate,
     persistTemplateSelection,
     syncDesktopAutomationSchedule,
     readDesktopAutomationSettings,

@@ -33,6 +33,26 @@ function collectExecutionModes(result, scope = null) {
   return [parsed.mode, ...nestedResults.map((entry) => entry?.mode).filter(Boolean)].filter(Boolean);
 }
 
+function publishVisibilityOptionsForAction(action, options = {}) {
+  const platformsByAction = {
+    "execute-publish": ["xiaohongshu", "douyin"],
+    "execute-xiaohongshu": ["xiaohongshu"],
+    "execute-douyin": ["douyin"],
+    "execute-video-publish": ["xiaohongshu", "douyin"],
+    "execute-video-xiaohongshu": ["xiaohongshu"],
+    "execute-video-douyin": ["douyin"]
+  };
+  const platforms = platformsByAction[action] || [];
+  const result = {};
+  if (platforms.includes("xiaohongshu") && typeof options.publishXiaohongshuPrivate === "boolean") {
+    result.publishXiaohongshuPrivate = options.publishXiaohongshuPrivate;
+  }
+  if (platforms.includes("douyin") && typeof options.publishDouyinPrivate === "boolean") {
+    result.publishDouyinPrivate = options.publishDouyinPrivate;
+  }
+  return result;
+}
+
 function resolveImageExecution(result) {
   const imageResult = result?.parsed?.results?.image || {};
   const promptResult = result?.parsed?.prompt_result || {};
@@ -1075,6 +1095,7 @@ function createWorkflowOrchestrator(deps) {
       });
       const rawResult = await deps.runCli("execute-adapters", {
         ...normalized,
+        ...publishVisibilityOptionsForAction(action, options),
         scope: scopeByAction[action]
       });
       const publishError = resolvePublishExecutionError(rawResult, scopeByAction[action]);
@@ -1226,6 +1247,7 @@ function createWorkflowOrchestrator(deps) {
       });
       const rawResult = await deps.runCli("execute-adapters", {
         ...normalized,
+        ...publishVisibilityOptionsForAction(action, options),
         scope: scopeByAction[action]
       });
       const publishError = resolvePublishExecutionError(rawResult, scopeByAction[action]);

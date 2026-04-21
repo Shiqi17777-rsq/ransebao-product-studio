@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld("desktopApp", {
   saveBriefDraft: (payload) => ipcRenderer.invoke(IPC_CHANNELS.briefSaveDraft, payload),
   selectBrief: (payload) => ipcRenderer.invoke(IPC_CHANNELS.briefSelect, payload),
   saveTemplateSelection: (payload) => ipcRenderer.invoke(IPC_CHANNELS.templateSaveSelection, payload),
+  importImageTemplate: (payload) => ipcRenderer.invoke(IPC_CHANNELS.imageTemplateImport, payload),
+  importVideoTemplate: (payload) => ipcRenderer.invoke(IPC_CHANNELS.videoTemplateImport, payload),
   saveAutomationSettings: (payload) => ipcRenderer.invoke(IPC_CHANNELS.automationSaveSettings, payload),
   openPath: (targetPath) => ipcRenderer.invoke(IPC_CHANNELS.shellOpenPath, targetPath),
   onWorkflowProgress: (callback) => {

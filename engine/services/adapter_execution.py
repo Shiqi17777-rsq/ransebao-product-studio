@@ -1028,6 +1028,8 @@ def execute_multi_account_plan(plan: dict[str, Any], *, execute: bool) -> dict[s
         "ready": plan.get("ready", False),
         "cwd": plan.get("cwd"),
         "planned_command": plan.get("planned_command"),
+        "headed": plan.get("headed"),
+        "private": plan.get("private"),
         "notes": list(plan.get("notes", [])),
         "images": list(plan.get("images", [])),
         "file": plan.get("file"),

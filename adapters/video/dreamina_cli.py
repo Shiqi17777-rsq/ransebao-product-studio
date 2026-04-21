@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import struct
@@ -13,6 +14,7 @@ VIDEO_TEMPLATE_ROOT = REPO_ROOT / "products" / "ransebao" / "assets" / "video-te
 VIDEO_TEMPLATE_CATALOG = VIDEO_TEMPLATE_ROOT / "catalog.json"
 DEFAULT_TEMPLATE_ID = "beauty-hair-transformation"
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+VIDEO_SUFFIXES = {".mp4"}
 
 
 def _configured_string(value: Any) -> str:
@@ -127,15 +129,120 @@ def _resolve_dreamina_bin(cli_value: str) -> str:
     return _resolve_existing_file(cli_value)
 
 
-def _load_template_catalog() -> dict[str, Any]:
+def _runtime_product_dir(prompt_env: dict[str, Any]) -> Path | None:
+    artifact_prompt = _configured_string((prompt_env.get("artifacts") or {}).get("prompt_txt"))
+    product_id = _configured_string(prompt_env.get("product_id")) or "ransebao"
+    if artifact_prompt:
+        prompt_path = Path(artifact_prompt).expanduser()
+        try:
+            product_dir = prompt_path.parent.parent.parent
+            if product_dir.name == product_id:
+                return product_dir
+        except Exception:
+            pass
+    runtime_root = _configured_string(os.getenv("PRODUCT_STUDIO_RUNTIME_ROOT"))
+    if runtime_root:
+        return Path(runtime_root).expanduser() / product_id
+    return REPO_ROOT / "runtime" / product_id
+
+
+def _resolve_imported_template_file(template_dir: Path, value: Any, fallback_name: str) -> Path | None:
+    candidates = [
+        Path(_configured_string(value)).expanduser() if _configured_string(value) else None,
+        template_dir / fallback_name,
+    ]
+    for candidate in candidates:
+        if candidate and candidate.is_file():
+            return candidate
+    return None
+
+
+def _load_runtime_video_templates(prompt_env: dict[str, Any]) -> list[dict[str, Any]]:
+    product_dir = _runtime_product_dir(prompt_env)
+    if not product_dir:
+        return []
+    root = product_dir / "assets" / "video-templates"
+    if not root.is_dir():
+        return []
+    templates: list[dict[str, Any]] = []
+    for template_json in sorted(root.glob("*/template.json")):
+        try:
+            payload = json.loads(template_json.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        template_dir = template_json.parent
+        template_id = _configured_string(payload.get("id") or template_dir.name)
+        if not template_id or not template_id.startswith("local-"):
+            continue
+        template_video = _resolve_imported_template_file(
+            template_dir,
+            payload.get("templateVideoPath") or payload.get("template_video_path") or payload.get("template_video"),
+            "template.mp4",
+        )
+        prompt_template = _resolve_imported_template_file(
+            template_dir,
+            payload.get("promptTemplatePath") or payload.get("prompt_template_path") or payload.get("prompt_template"),
+            "prompt_template.txt",
+        )
+        if not template_video or template_video.suffix.lower() not in VIDEO_SUFFIXES or not prompt_template:
+            continue
+        douyin_note_template = _resolve_imported_template_file(
+            template_dir,
+            payload.get("douyinNoteTemplatePath")
+            or payload.get("douyin_note_template_path")
+            or payload.get("douyin_note_template"),
+            "douyin_note_template.txt",
+        )
+        xiaohongshu_body_template = _resolve_imported_template_file(
+            template_dir,
+            payload.get("xiaohongshuBodyTemplatePath")
+            or payload.get("xiaohongshu_body_template_path")
+            or payload.get("xiaohongshu_body_template"),
+            "xiaohongshu_body_template.txt",
+        )
+        templates.append(
+            {
+                "id": template_id,
+                "source": "local_import",
+                "name": _configured_string(payload.get("name")) or template_id,
+                "description": _configured_string(payload.get("description")),
+                "template_video": str(template_video),
+                "prompt_template": str(prompt_template),
+                "douyin_note_template": str(douyin_note_template) if douyin_note_template else "",
+                "xiaohongshu_body_template": str(xiaohongshu_body_template) if xiaohongshu_body_template else "",
+                "model_version": _configured_string(payload.get("modelVersion") or payload.get("model_version"))
+                or "seedance2.0_vip",
+                "duration": _safe_int(payload.get("duration"), 15),
+                "ratio": _configured_string(payload.get("ratio")) or "16:9",
+                "video_resolution": _configured_string(
+                    payload.get("videoResolution") or payload.get("video_resolution")
+                )
+                or "720p",
+                "_template_dir": str(template_dir),
+            }
+        )
+    return templates
+
+
+def _load_template_catalog(prompt_env: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
-        return json.loads(VIDEO_TEMPLATE_CATALOG.read_text(encoding="utf-8"))
+        catalog = json.loads(VIDEO_TEMPLATE_CATALOG.read_text(encoding="utf-8"))
     except Exception:
-        return {"default_template": DEFAULT_TEMPLATE_ID, "templates": []}
+        catalog = {"default_template": DEFAULT_TEMPLATE_ID, "templates": []}
+    templates = catalog.get("templates") if isinstance(catalog.get("templates"), list) else []
+    imported_templates = _load_runtime_video_templates(prompt_env or {})
+    existing_ids = {item.get("id") for item in templates if isinstance(item, dict)}
+    return {
+        **catalog,
+        "templates": [
+            *templates,
+            *[template for template in imported_templates if template.get("id") not in existing_ids],
+        ],
+    }
 
 
-def _load_template(template_id: str) -> dict[str, Any]:
-    catalog = _load_template_catalog()
+def _load_template(template_id: str, prompt_env: dict[str, Any]) -> dict[str, Any]:
+    catalog = _load_template_catalog(prompt_env)
     requested = _configured_string(template_id) or _configured_string(catalog.get("default_template")) or DEFAULT_TEMPLATE_ID
     templates = catalog.get("templates") if isinstance(catalog.get("templates"), list) else []
     matched = next((item for item in templates if item.get("id") == requested), None)
@@ -157,10 +264,22 @@ def _load_template(template_id: str) -> dict[str, Any]:
 
 
 def _resolve_template_file(template: dict[str, Any], key: str) -> str:
-    relative = _configured_string(template.get(key))
-    if not relative:
+    aliases = {
+        "template_video": ["templateVideoPath", "template_video_path"],
+        "prompt_template": ["promptTemplatePath", "prompt_template_path"],
+        "douyin_note_template": ["douyinNoteTemplatePath", "douyin_note_template_path"],
+        "xiaohongshu_body_template": ["xiaohongshuBodyTemplatePath", "xiaohongshu_body_template_path"],
+    }
+    raw_value = template.get(key)
+    for alias in aliases.get(key, []):
+        raw_value = raw_value or template.get(alias)
+    configured = _configured_string(raw_value)
+    if not configured:
         return ""
-    candidate = VIDEO_TEMPLATE_ROOT / relative
+    candidate = Path(configured).expanduser()
+    if not candidate.is_absolute():
+        template_dir = _configured_string(template.get("_template_dir") or template.get("template_dir"))
+        candidate = (Path(template_dir) if template_dir else VIDEO_TEMPLATE_ROOT) / configured
     return str(candidate) if candidate.is_file() else ""
 
 
@@ -267,7 +386,7 @@ def _build_missing_requirements(
 def plan_generation(prompt_env: dict[str, Any], local_config: dict[str, Any]) -> dict[str, Any]:
     image_cfg = local_config.get("image", {}) if isinstance(local_config, dict) else {}
     video_cfg = local_config.get("video", {}) if isinstance(local_config, dict) else {}
-    template = _load_template(_configured_string(video_cfg.get("template_id")))
+    template = _load_template(_configured_string(video_cfg.get("template_id")), prompt_env)
     template_id = _configured_string(template.get("id")) or DEFAULT_TEMPLATE_ID
     template_name = _configured_string(template.get("name")) or "High-impact beauty transformation video"
     template_video_path = _resolve_template_file(template, "template_video")

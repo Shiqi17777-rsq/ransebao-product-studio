@@ -56,7 +56,7 @@ def publish_headed(local_config: dict[str, Any], platform: str) -> bool:
 def publish_private(local_config: dict[str, Any], platform: str) -> bool:
     publish_cfg = local_config.get("publish", {})
     platform_cfg = publish_cfg.get(platform, {})
-    return bool(platform_cfg.get("private", False))
+    return bool(platform_cfg.get("private", True))
 
 
 def enabled_accounts(local_config: dict[str, Any], platform: str) -> list[dict[str, Any]]:

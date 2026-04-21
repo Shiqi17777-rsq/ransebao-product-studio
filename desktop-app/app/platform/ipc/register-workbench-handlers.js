@@ -44,6 +44,8 @@ function registerWorkbenchIpcHandlers(deps) {
     normalizeTemplateSelection,
     readJsonSafe,
     loadTemplateCatalog,
+    importImageTemplate,
+    importVideoTemplate,
     persistTemplateSelection,
     syncDesktopAutomationSchedule,
     readDesktopAutomationSettings,
@@ -128,6 +130,20 @@ function registerWorkbenchIpcHandlers(deps) {
       Array.isArray(payload?.selectedTemplates) ? payload.selectedTemplates : existing.selectedTemplates
     );
     return { ok: true, path: result.path, selection: result.selection, gallery: result.gallery };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.imageTemplateImport, async (_event, payload) => {
+    if (typeof importImageTemplate !== "function") {
+      return { ok: false, error: "Image template import is not available." };
+    }
+    return importImageTemplate(payload || {});
+  });
+
+  ipcMain.handle(IPC_CHANNELS.videoTemplateImport, async (_event, payload) => {
+    if (typeof importVideoTemplate !== "function") {
+      return { ok: false, error: "Video template import is not available." };
+    }
+    return importVideoTemplate(payload || {});
   });
 
   ipcMain.handle(IPC_CHANNELS.automationSaveSettings, async (_event, payload) => {

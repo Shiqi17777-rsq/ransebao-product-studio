@@ -32,6 +32,8 @@ function createDependencyStateCore(deps) {
     const imageCfg = localConfig?.image || {};
     const videoCfg = localConfig?.video || {};
     const publishCfg = localConfig?.publish || {};
+    const xiaohongshuPublishCfg = publishCfg?.xiaohongshu || {};
+    const douyinPublishCfg = publishCfg?.douyin || {};
     const sauRoot = deps.resolveSauRoot(localConfig);
     return {
       selectedProduct: deps.configuredString(localConfig?.selected_product || "ransebao"),
@@ -73,7 +75,15 @@ function createDependencyStateCore(deps) {
         sauRoot,
         patchrightBrowsersPath: deps.resolvePatchrightBrowsersPath(localConfig),
         xiaohongshuRoot: deps.configuredString(publishCfg?.xiaohongshu?.root),
-        douyinRoot: deps.configuredString(publishCfg?.douyin?.root)
+        douyinRoot: deps.configuredString(publishCfg?.douyin?.root),
+        xiaohongshu: {
+          private: xiaohongshuPublishCfg?.private !== false,
+          headed: xiaohongshuPublishCfg?.headed !== false
+        },
+        douyin: {
+          private: douyinPublishCfg?.private !== false,
+          headed: douyinPublishCfg?.headed !== false
+        }
       }
     };
   }

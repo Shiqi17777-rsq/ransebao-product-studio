@@ -33,56 +33,58 @@ def plan_publish(video_payload: dict[str, Any], local_config: dict[str, Any]) ->
     title = coerce_text(video_payload.get("douyin_title")) or default_video_title("douyin", hair_color_name, template_name)
     desc = coerce_text(video_payload.get("douyin_desc")) or coerce_text(video_payload.get("douyin_note_text"))
     tags = coerce_text(video_payload.get("douyin_tags")) or default_video_tags("douyin", hair_color_name, desc)
+    can_plan_commands = bool(root and video_path and title)
 
     account_plans: list[dict[str, Any]] = []
-    for account in accounts:
-        argv = [
-            sau_bin,
-            "douyin",
-            "upload-video",
-            "--account",
-            account["accountName"],
-            "--file",
-            video_path,
-            "--title",
-            title,
-        ]
-        if desc:
-            argv.extend(["--desc", desc])
-        if tags:
-            argv.extend(["--tags", tags])
-        if private_publish:
-            argv.append("--private")
-        argv.append("--headed" if headed else "--headless")
+    if can_plan_commands:
+        for account in accounts:
+            argv = [
+                sau_bin,
+                "douyin",
+                "upload-video",
+                "--account",
+                account["accountName"],
+                "--file",
+                video_path,
+                "--title",
+                title,
+            ]
+            if desc:
+                argv.extend(["--desc", desc])
+            if tags:
+                argv.extend(["--tags", tags])
+            if private_publish:
+                argv.append("--private")
+            argv.append("--headed" if headed else "--headless")
 
-        command = (
-            f"cd {root} && "
-            f"{sau_bin} douyin upload-video --account '{account['accountName']}'"
-            f" --file '{video_path}' --title '{title}'"
-        )
-        if desc:
-            command += f" --desc '{desc}'"
-        if tags:
-            command += f" --tags '{tags}'"
-        if private_publish:
-            command += " --private"
-        command += f" {'--headed' if headed else '--headless'}"
+            command = (
+                f"cd {root} && "
+                f"{sau_bin} douyin upload-video --account '{account['accountName']}'"
+                f" --file '{video_path}' --title '{title}'"
+            )
+            if desc:
+                command += f" --desc '{desc}'"
+            if tags:
+                command += f" --tags '{tags}'"
+            if private_publish:
+                command += " --private"
+            command += f" {'--headed' if headed else '--headless'}"
 
-        account_plans.append(
-            {
-                "accountName": account["accountName"],
-                "displayName": account["displayName"],
-                "argv": argv,
-                "env": sau_env,
-                "planned_command": command,
-            }
-        )
+            account_plans.append(
+                {
+                    "accountName": account["accountName"],
+                    "displayName": account["displayName"],
+                    "argv": argv,
+                    "env": sau_env,
+                    "planned_command": command,
+                }
+            )
 
     return {
         "adapter": "douyin-video-sau",
         "platform": "douyin",
         "publish_type": "video",
-        "ready": bool(root and video_path and title and account_plans),
+        "ready": bool(can_plan_commands and account_plans),
         "root": root,
         "cwd": root or None,
         "sau_bin": sau_bin,

@@ -18,6 +18,8 @@ const IPC_CHANNELS = {
   briefSaveDraft: "brief:saveDraft",
   briefSelect: "brief:select",
   templateSaveSelection: "template:saveSelection",
+  imageTemplateImport: "image-template:import",
+  videoTemplateImport: "video-template:import",
   automationSaveSettings: "automation:saveSettings",
   shellOpenPath: "shell:openPath"
 };
