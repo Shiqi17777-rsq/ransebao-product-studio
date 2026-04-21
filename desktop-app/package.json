@@ -1,6 +1,6 @@
 {
   "name": "ransebao-desktop-app",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "染色宝 Product Studio 桌面壳",
   "main": "main.js",
